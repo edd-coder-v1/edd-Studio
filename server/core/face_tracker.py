@@ -1,6 +1,6 @@
 """
 Face detection and speaker-aware tracking for 9:16 vertical, 1:1 square, and 4:5 portrait smart crop.
-Uses YOLO (ultralytics) with OpenCV. Cross-platform.
+Uses bundled YuNet with OpenCV by default. Legacy YOLO is explicit opt-in.
 Heavy deps (cv2, numpy) are imported lazily so the server can boot without them.
 """
 
@@ -15,7 +15,8 @@ def _models_dir() -> str:
     so the weight loads from the same place no matter what working directory
     the server was launched from. Created on demand.
     """
-    root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from server.core.reliability import data_root
+    root = str(data_root())
     path = os.path.join(root, "models")
     os.makedirs(path, exist_ok=True)
     return path
@@ -40,9 +41,20 @@ class FaceTracker:
     def _init_model(self):
         if self.model is not None:
             return
+        if os.environ.get('KLIPZY_VISION_BACKEND', 'opencv').lower() != 'yolo':
+            try:
+                from server.core.local_vision import LocalFaceDetector
+                self.model = LocalFaceDetector()
+            except (ImportError, RuntimeError, OSError, AttributeError):
+                self.model = None
+            return
         try:
+            model_path = self._resolve_model_path()
+            if not os.path.isfile(model_path):
+                # No implicit network/download on opening a project.
+                return
             from ultralytics import YOLO
-            self.model = YOLO(self._resolve_model_path())
+            self.model = YOLO(model_path)
         except Exception:
             self.model = None
 
@@ -601,4 +613,3 @@ class FaceTracker:
             start_time, end_time, diar_segments, speaker_pos,
             width, target_crop_width, sample_fps=sample_fps,
         )
-

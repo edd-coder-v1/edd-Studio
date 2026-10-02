@@ -15,7 +15,7 @@ from typing import Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from server.models import (
     ChatRequest, ChatResponse, ProcessRequest, ProcessResponse, ClipResult,
@@ -98,6 +98,30 @@ from server.api import imports as _imports_api  # noqa: E402
 app.include_router(_imports_api.router)
 from server.api import media as _media_api
 app.include_router(_media_api.router)
+
+
+
+@app.get('/recovery')
+def list_recovery():
+    from server.core.reliability import recovery_jobs
+    return {'jobs': recovery_jobs(JOBS)}
+
+@app.post('/recovery/{job_id}/retry')
+def retry_recovered_job(job_id: str):
+    from server.core.reliability import recovery_jobs
+    record = next((r for r in recovery_jobs(JOBS) if r['id']==job_id), None)
+    if not record or record['result'].get('status') not in ('interrupted','failed','cancelled'):
+        raise HTTPException(400, 'Only stopped jobs can be restarted')
+    if record['request'].get('kind'):
+        raise HTTPException(400, 'Open Multicamera and review the saved plan before restarting it')
+    return {'job_id': _enqueue_process_job(ProcessRequest(**record['request']))}
+
+class MediaPathsRequest(BaseModel):
+    paths: List[str]
+
+@app.post('/project/media-status')
+def project_media_status(req: MediaPathsRequest):
+    return {'missing': [path for path in req.paths[:1000] if not os.path.isfile(path)]}
 
 # In-memory job store. To avoid unbounded growth over a long session (each
 # /process stores full clip metadata + words), keep only the most recent jobs
@@ -319,6 +343,8 @@ def _enqueue_process_job(req: "ProcessRequest") -> str:
     _JOB_REQUESTS[job_id] = req
     _JOB_CANCEL[job_id] = threading.Event()
     _JOBS_ORDER.append(job_id)
+    from server.core.reliability import journal_job
+    journal_job(job_id, req.model_dump(), dict(JOBS[job_id]))
     _prune_jobs()
 
     global _WORKER_THREAD
@@ -423,6 +449,8 @@ def _run_job(job_id: str) -> None:
         JOBS[job_id]["status"] = "failed"
         JOBS[job_id]["error"] = str(e)
     finally:
+        from server.core.reliability import journal_job
+        journal_job(job_id, req.model_dump(), dict(JOBS[job_id]))
         trace.unbind()
         proc.end_job()  # clear the kill-registry; next job starts clean
 
@@ -1187,6 +1215,21 @@ def api_suggest_moments(req: SuggestMomentsRequest):
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
+def _preserve_clean_cut(req, result):
+    """Keep a text-free cut for later caption revisions; never overwrite sources."""
+    if not req.clean_source:
+        return result
+    if not os.path.isfile(req.clean_source):
+        raise ValueError('Restore the original source before cutting an editable clip')
+    from server.core.silence_cutter import render_kept_segments
+    output = Path(result['output_path'])
+    clean = str(output.with_name(output.stem + '.clean-' + uuid.uuid4().hex[:8] + '.mp4'))
+    ranges = [(a + req.source_start, b + req.source_start) for a,b in result['kept_ranges']]
+    render_kept_segments(req.clean_source, clean, ranges)
+    result['clean_output_path'] = clean
+    return result
+
+
 @app.post("/tools/remove-silence", response_model=RemoveSilenceResponse)
 def api_remove_silence(req: RemoveSilenceRequest):
     """Auto-cut dead air silence from a video clip."""
@@ -1195,7 +1238,7 @@ def api_remove_silence(req: RemoveSilenceRequest):
         out_path = req.output_path
         if not out_path:
             p = Path(req.video_path)
-            out_path = str(p.parent / f"{p.stem}_tight{p.suffix}")
+            out_path = str(p.parent / f"{p.stem}_tight_{uuid.uuid4().hex[:8]}{p.suffix}")
         
         result = remove_silence(
             input_video=req.video_path,
@@ -1204,12 +1247,15 @@ def api_remove_silence(req: RemoveSilenceRequest):
             min_silence_duration=req.min_silence_duration,
             pad_seconds=req.pad_seconds,
         )
+        _preserve_clean_cut(req, result)
         return RemoveSilenceResponse(
             output_path=result["output_path"],
+            clean_output_path=result.get('clean_output_path'),
             original_duration=result["original_duration"],
             cut_duration=result["cut_duration"],
             time_saved=result["time_saved"],
             silence_intervals=result.get("silence_intervals", []),
+            kept_ranges=result.get("kept_ranges", []),
             message=result["message"],
         )
     except Exception as e:
@@ -1218,6 +1264,8 @@ def api_remove_silence(req: RemoveSilenceRequest):
 
 class RemoveFillersRequest(BaseModel):
     video_path: str
+    clean_source: Optional[str] = None
+    source_start: float = Field(default=0,ge=0,allow_inf_nan=False)
     words: List[dict] = []
     output_path: Optional[str] = None
     extra_fillers: List[str] = []
@@ -1235,9 +1283,9 @@ def api_remove_fillers(req: RemoveFillersRequest):
     out_path = req.output_path
     if not out_path:
         p = Path(req.video_path)
-        out_path = str(p.parent / f"{p.stem}_nofiller{p.suffix}")
+        out_path = str(p.parent / f"{p.stem}_nofiller_{uuid.uuid4().hex[:8]}{p.suffix}")
     try:
-        return remove_fillers(
+        result = remove_fillers(
             input_video=req.video_path,
             output_video=out_path,
             words=req.words,
@@ -1245,6 +1293,7 @@ def api_remove_fillers(req: RemoveFillersRequest):
             also_remove_silence=req.also_remove_silence,
             remove_phrases=req.remove_phrases,
         )
+        return _preserve_clean_cut(req, result)
     except Exception as e:  # noqa: BLE001
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -2472,10 +2521,43 @@ class AIModelRequest(BaseModel):
 def get_ai_models():
     """Current preferred LLM model + the Ollama models installed locally."""
     from server.core import system_check as sc
+    state=sc.detect_ollama()
+    try:
+        inventory = sc.ollama_disk_inventory()
+        models = inventory["models"]
+    except Exception as exc:
+        raise HTTPException(503,'Could not read the model inventory. Check access to the Ollama models folder or refresh the running service.') from exc
     return {
         "ollama": PREFERRED_OLLAMA_MODEL,
-        "installed_ollama_models": sc.list_ollama_models(),
+        "installed_ollama_models": models,
+        "ollama_status": state,
+        "inventory": inventory,
     }
+
+
+_OLLAMA_START_LOCK = threading.Lock()
+
+@app.post('/api/setup/ollama/start')
+def start_local_ollama():
+    """Explicit user action; model listing itself never starts a service."""
+    from server.core import system_check as sc
+    import subprocess
+    import time
+    with _OLLAMA_START_LOCK:
+        state=sc.detect_ollama()
+        if state['running']:return {'ok':True,'running':True}
+        if not state.get('executable'):
+            raise HTTPException(409,'Ollama is not installed. Install it in Settings first.')
+        options={'stdout':subprocess.DEVNULL,'stderr':subprocess.DEVNULL,'stdin':subprocess.DEVNULL}
+        if os.name=='nt':options['creationflags']=subprocess.CREATE_NO_WINDOW
+        else:options['start_new_session']=True
+        try:child=subprocess.Popen([state['executable'],'serve'],**options)
+        except OSError as exc:raise HTTPException(503,'Could not start Ollama. Launch the installed Ollama app and refresh models.') from exc
+        for _ in range(32):
+            if sc.detect_ollama()['running']:return {'ok':True,'running':True}
+            if child.poll() is not None:break
+            time.sleep(.25)
+        raise HTTPException(503,'Ollama has not become ready. Launch its app or wait a moment, then refresh models.')
 
 
 @app.get("/api/setup/model-catalog")
@@ -2491,6 +2573,41 @@ def model_catalog(preset: str = ""):
     return data
 
 
+@app.get("/api/setup/model-folder")
+def model_folder(kind: str, model: str = "", file_index: int = 0):
+    """Locate local model storage without downloading or creating anything."""
+    from pathlib import Path
+    if kind == "ollama":
+        from server.core import system_check as sc
+        folder = sc.ollama_models_root()
+        if model:
+            inventory = sc.ollama_disk_inventory()
+            name = next((name for name in inventory["models"] if name == model or name == model + ":latest"), None)
+            files = inventory["model_files"].get(name, [])
+            if not files or file_index < 0 or file_index >= len(files):
+                raise HTTPException(404, "No complete local model file was found for this selection. Refresh models.")
+            return {"path": files[file_index], "files": files, "model": name}
+    elif kind == "whisper":
+        from server.core import whisper_models
+        backend = whisper_models.active_backend()
+        if backend in (None, "remote"):
+            raise HTTPException(409, "No local Whisper model storage is active.")
+        if backend == "openai-whisper":
+            folder = Path(whisper_models._openai_cache_root())
+        else:
+            from huggingface_hub.constants import HF_HUB_CACHE
+            repo = whisper_models._hf_repo(model or "base", backend)
+            folder = Path(HF_HUB_CACHE)
+            if repo:
+                folder = folder / ("models--" + repo.replace("/", "--"))
+    else:
+        raise HTTPException(400, "Unknown model kind")
+    folder = folder.resolve()
+    if not folder.is_dir():
+        raise HTTPException(404, f"Model folder does not exist yet: {folder}. Download a model first.")
+    return {"path": str(folder)}
+
+
 @app.post("/api/setup/ai-model")
 def set_ai_model(req: AIModelRequest):
     """Change the active local LLM model used by chat + highlight discovery."""
@@ -2500,7 +2617,7 @@ def set_ai_model(req: AIModelRequest):
         raise HTTPException(status_code=400, detail="model is required")
     if req.kind == "ollama":
         from server.core import system_check as sc
-        installed = sc.list_ollama_models()
+        installed = sc.ollama_disk_inventory()["models"]
         resolved = next((name for name in installed if name == model or name == model + ":latest"), None)
         if not resolved:
             raise HTTPException(status_code=409, detail="This model is not downloaded or Ollama is unavailable. Download it in Settings, wait for completion, then refresh and select it.")

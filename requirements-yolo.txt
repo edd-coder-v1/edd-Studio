@@ -1,0 +1,3 @@
+# Optional legacy backend only. Review Ultralytics AGPL/commercial terms before use.
+# Set KLIPZY_VISION_BACKEND=yolo and provide an existing local model file.
+ultralytics>=8.0.0

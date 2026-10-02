@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('clipperAPI', {
   selectVideo: () => ipcRenderer.invoke('select-video'),
   restartApp: () => ipcRenderer.invoke('restart-app'),
   getServerStatus: () => ipcRenderer.invoke('server-status'),
+  stopOllama: () => ipcRenderer.invoke('stop-ollama'),
   getServerUrl: () => ipcRenderer.invoke('server-url'),
   // Shared secret for the local API. See server/auth.py for why it exists.
   getApiToken: () => ipcRenderer.invoke('api-token'),

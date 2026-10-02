@@ -206,6 +206,7 @@ function applyCaptionPreviewStyle() {
   });
   applyPortraitCaptionPreviewStyle();
   updateHookPreview();  // keep the hook preview in sync with style changes
+  applyPortraitCaptionPreviewStyle();
 }
 
 function refreshCaptionPreview() {
@@ -735,14 +736,15 @@ window.quickCutSilence = async function(clipIndex) {
     const res = await fetch(`${serverUrl}/tools/remove-silence`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ video_path: clip.output_file }),
+      body: JSON.stringify({ video_path: clip.output_file, clean_source: clip.source_file || selectedVideo, source_start: Number(clip.start_time) || 0 }),
     });
     const data = await res.json();
     if (res.ok) {
       playSuccessSound();
       showAlert(`✂️ Dead air removed! Saved ${data.time_saved}s (${data.original_duration}s -> ${data.cut_duration}s)`);
-      clip.output_file = data.output_path;
-      clip.duration = data.cut_duration;
+      KlipzyProjects.applyCut(clip, data);
+      await refreshCutSubtitles(clip);
+      saveCurrentProjectSilently();
       showResults(generatedClips);
     } else {
       throw new Error(data.detail || 'Silence removal failed');

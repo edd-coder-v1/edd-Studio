@@ -36,11 +36,16 @@
       </nav>
       <div class="sidebar-models">
         <label for="sidebar-ai-model">Local AI model</label>
-        <select id="sidebar-ai-model" disabled><option>Loading models…</option></select>
+        <span id="sidebar-model-state" class="model-state" role="status" aria-live="polite" data-state="detecting">Checking Ollama…</span>
+        <select id="sidebar-ai-model" disabled><option value="">Loading models…</option></select>
         <button id="sidebar-refresh-models" class="btn btn-small" type="button">Refresh models</button>
+        <button id="sidebar-stop-ollama" class="btn btn-small" type="button" hidden>Stop Ollama</button>
+        <button id="sidebar-start-ollama" class="btn btn-small" type="button" hidden>Start Ollama</button>
         <label for="sidebar-whisper-model">Transcription quality</label>
         <select id="sidebar-whisper-model"><option value="tiny">Tiny · fastest</option><option value="base">Base · fast</option><option value="small">Small · balanced</option><option value="medium">Medium · detailed</option><option value="large-v3">Large v3 · highest capacity</option></select>
-        <small id="sidebar-model-status" role="status">Choose the model for upcoming AI requests and transcription for new jobs.</small>
+        <small id="sidebar-model-status" role="status" aria-live="polite">Checking models already installed on this computer. No downloads.</small>
+        <small id="quality-model-status" role="status" aria-live="polite"></small>
+        <button id="quality-model-link" class="btn btn-small" type="button">View transcription model</button>
       </div>
       <div class="sidebar-footer">
         <div class="sidebar-quick-actions">
@@ -1325,7 +1330,7 @@ This is a practical product policy, not a legal opinion or a guarantee of enforc
         <!-- GPU acceleration card (hardware-aware, guided) -->
         <div class="card">
           <div class="card-head-row">
-            <h3>GPU Acceleration</h3>
+            <h3>Hardware Acceleration</h3>
             <span class="muted small">PyTorch — powers Whisper &amp; face-tracking</span>
           </div>
           <div id="gpu-accel" class="gpu-accel">
@@ -1395,7 +1400,7 @@ This is a practical product policy, not a legal opinion or a guarantee of enforc
         <!-- Change AI models card -->
         <div class="card">
           <div class="card-head-row">
-            <h3>AI Models</h3>
+            <h3>Local AI Model Catalog</h3>
             <span class="muted small">Pick what runs on your machine</span>
           </div>
           <p class="muted">Choose the transcription and local-LLM models. The recommended picks above are matched to your hardware; you're free to change them.</p>
@@ -1418,6 +1423,17 @@ This is a practical product policy, not a legal opinion or a guarantee of enforc
             </label>
           </div>
           <p class="muted small" id="ai-models-note">Whisper size applies to the next clipping run. The LLM model is used by AI Edit Chat, LLM highlight discovery, and the optional AI hook rewrite.</p>
+          <section id="quality-model-download" tabindex="-1" aria-labelledby="quality-model-title">
+            <h3 id="quality-model-title">Transcription model download</h3>
+            <p id="quality-model-detail" role="status" aria-live="polite">Select a transcription quality to check its model.</p>
+            <p class="muted small">Downloading is optional. Viewing this panel or changing quality does not start a download. Larger models use more disk space and memory.</p>
+            <button id="quality-model-refresh" class="btn btn-small" type="button">Check availability</button>
+            <button id="quality-model-folder" class="btn btn-small" type="button">Open model folder</button>
+            <button id="quality-model-download-btn" class="btn btn-primary" type="button" disabled>Download selected model</button>
+            <button id="quality-model-cancel" class="btn btn-small" type="button" disabled>Cancel download</button>
+            <progress id="quality-model-progress" max="100" value="0" hidden></progress>
+            <p id="quality-download-status" role="status" aria-live="polite"></p>
+          </section>
 
           <!-- AI backend: built-in Ollama, or any OpenAI-compatible server -->
           <div class="card-head-row" style="margin-top:18px;">
@@ -1581,6 +1597,8 @@ This is a practical product policy, not a legal opinion or a guarantee of enforc
   <script src="src/process-payload.js"></script>
   <script src="src/caption-preview-math.js"></script>
   <script src="src/editor-spec.js"></script>
+  <script src="src/project-store.js"></script>
+  <script src="src/cut-timing.js"></script>
   <script src="src/renderer.js"></script>
   <script src="src/url-import.js"></script>
   <script src="src/media-tools.js"></script>
@@ -1591,6 +1609,9 @@ This is a practical product policy, not a legal opinion or a guarantee of enforc
   <script src="src/editor.js"></script>
   <script src="src/install-activity.js"></script>
   <script src="src/setup-panel.js"></script>
+  <script src="src/quality-model-download.js"></script>
   <script src="src/studio-layout.js"></script>
+  <script src="src/standard-tools.js"></script>
+
 </body>
 </html>

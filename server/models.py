@@ -440,6 +440,8 @@ class DetectSilenceResponse(BaseModel):
 
 class RemoveSilenceRequest(BaseModel):
     video_path: str
+    clean_source: Optional[str] = None
+    source_start: float = Field(default=0,ge=0,allow_inf_nan=False)
     output_path: Optional[str] = None
     noise_threshold_db: float = -30.0
     min_silence_duration: float = 0.6
@@ -448,10 +450,12 @@ class RemoveSilenceRequest(BaseModel):
 
 class RemoveSilenceResponse(BaseModel):
     output_path: str
+    clean_output_path: Optional[str] = None
     original_duration: float
     cut_duration: float
     time_saved: float
     silence_intervals: List[dict] = Field(default_factory=list)
+    kept_ranges: List[List[float]] = Field(default_factory=list)
     message: str
 
 

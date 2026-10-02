@@ -147,6 +147,7 @@ def remove_fillers(
             "cut_duration": round(orig_dur, 2),
             "time_saved": 0.0,
             "fillers_removed": 0,
+            "kept_ranges": [[0.0, orig_dur]],
             "message": "No fillers or dead air found to remove.",
         }
 
@@ -160,6 +161,7 @@ def remove_fillers(
         "cut_duration": round(cut_dur, 2),
         "time_saved": max(0.0, round(orig_dur - cut_dur, 2)),
         "fillers_removed": n_filler,
+        "kept_ranges": keep,
         "message": f"Removed {n_filler} filler word(s)"
                    + (" + dead air" if also_remove_silence else "")
                    + f", saved {max(0.0, round(orig_dur - cut_dur, 2))}s.",

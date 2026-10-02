@@ -2453,6 +2453,21 @@ body {
 .sidebar-models select { width: 100%; min-width: 0; font-size: 11px; padding: 7px; }
 .sidebar-models small { font-size: 10px; color: var(--text-muted, #a2a6b5); line-height: 1.4; }
 .rec-choice[aria-busy="true"] { opacity: .7; cursor: progress; }
+.model-state { display:flex; align-items:center; gap:7px; font-size:11px; color:var(--text-muted); }
+#sidebar-start-ollama[hidden] { display:none; }
+#sidebar-stop-ollama[hidden] { display:none; }
+.settings-disclosure > summary { cursor:pointer; font-weight:600; padding:6px 0; }
+.settings-disclosure[open] > summary { margin-bottom:18px; }
+.media-cache-panel > button { margin:12px 10px 16px 0; }
+.media-cache-panel > p { margin:12px 0; line-height:1.6; overflow-wrap:anywhere; }
+.model-service-actions { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+[data-selection-label]:empty { display:none; }
+.model-state::before { content:''; width:8px; height:8px; border-radius:50%; background:var(--text-muted); flex-shrink:0; }
+.model-state[data-state="ready"]::before { background:var(--success); }
+.model-state[data-state="error"]::before { background:var(--danger); }
+.model-state[aria-busy="true"]::before { width:10px; height:10px; background:transparent; border:2px solid var(--border); border-top-color:var(--accent); animation:model-state-spin .8s linear infinite; }
+@keyframes model-state-spin { to { transform:rotate(360deg); } }
+@media(prefers-reduced-motion:reduce) { .model-state[aria-busy="true"]::before { animation:none; border-color:var(--accent); border-right-color:transparent; } }
 
 .sidebar { overflow-y: auto; }
 .sidebar-models, .sidebar-footer { flex-shrink: 0; }
@@ -2495,3 +2510,10 @@ body {
 .dep-row { flex-wrap: wrap; }
 .dep-row > details { flex-basis: 100%; min-width: 0; }
 .dep-row > details code { display: block; white-space: pre-wrap; overflow-wrap: anywhere; margin: 8px 0; }
+.sidebar-models .model-service-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.sidebar-models .model-service-actions .btn { min-width:0; padding:6px 3px; font-size:10px; white-space:normal; }
+.model-group-heading,.model-group-description { grid-column:1/-1; margin:12px 0 0; }
+.model-group-description { margin:0 0 10px; }
+.model-file-details { margin:10px 0; }
+.model-file-details summary { cursor:pointer; }
+.model-file-details code { display:block; overflow-wrap:anywhere; font-size:11px; margin-top:8px; }

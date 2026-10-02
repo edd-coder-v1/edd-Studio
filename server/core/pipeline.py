@@ -17,6 +17,7 @@ from server.core.ffmpeg_tools import (
     extract_best_thumbnail,
 )
 from server.core.processing_trace import pipeline_scope
+from server.core.reliability import serial_heavy, data_root
 from server.core.transcriber import Transcriber
 from server.core.highlight_detector import HighlightDetector
 from server.core.audio_energy import detect_highlights_audio_energy
@@ -30,7 +31,7 @@ class VideoClipperEngine:
         # This keeps returned paths valid when FFmpeg temporarily changes cwd for subtitles.
         configured_dir = Path(output_dir)
         if not configured_dir.is_absolute():
-            configured_dir = Path(__file__).resolve().parents[2] / configured_dir
+            configured_dir = data_root() / configured_dir
         self.output_dir = configured_dir.resolve()
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -49,7 +50,7 @@ class VideoClipperEngine:
     # ------------------------------------------------------------------
     @staticmethod
     def _transcript_cache_path() -> Path:
-        cache_dir = Path(__file__).resolve().parents[2] / "output" / ".cache"
+        cache_dir = data_root() / "output" / ".cache"
         cache_dir.mkdir(parents=True, exist_ok=True)
         return cache_dir
 
@@ -137,6 +138,7 @@ class VideoClipperEngine:
         except Exception:
             pass
 
+    @serial_heavy
     @pipeline_scope
     def process_video(
         self,
@@ -258,6 +260,13 @@ class VideoClipperEngine:
         report("Transcribing with Whisper...", 25)
         effective_model = whisper_model or self.whisper_model or "base"
         cache_model = effective_model + "_audio_" + (audio_tracks if analysis_audio_tracks == "same" else analysis_audio_tracks).replace(",", "-") + "_lang_" + (language or "auto")
+        # Never mix results from different providers or remote model selections.
+        from server.core import asr_client
+        from server.core.transcriber import detect_active_backend
+        cfg = asr_client.load_config()
+        identity = {'backend': detect_active_backend().get('active'),
+                    'endpoint': cfg.get('base_url', ''), 'model': cfg.get('model', ''), 'version': 2}
+        cache_model += '_engine_' + hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()[:16]
         if analysis_audio_tracks == "same" and audio_track_gains:
             cache_model += "_mix_" + hashlib.sha1(json.dumps(audio_track_gains).encode()).hexdigest()[:10]
         # Reuse transcript if we've already transcribed this exact video with

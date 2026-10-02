@@ -474,6 +474,8 @@ async function quickRemoveFillers(idx, btn) {
       body: JSON.stringify({
         video_path: clip.output_file,
         // Rebase to the clip's 0-based timeline so filler cuts line up with the
+        clean_source: clip.source_file || selectedVideo,
+        source_start: Number(clip.start_time) || 0,
         // rendered clip (clip.words carry absolute source-video times).
         words: wordsClipRelative(clip.words || [], clip),
         also_remove_silence: true,
@@ -482,14 +484,15 @@ async function quickRemoveFillers(idx, btn) {
     });
     const data = await res.json();
     if (res.ok) {
-      clip.output_file = data.output_path;
-      if (typeof data.cut_duration === 'number') clip.duration = data.cut_duration;
+      KlipzyProjects.applyCut(clip, data);
+      await refreshCutSubtitles(clip);
       const card = document.querySelector(`.clip-card[data-clip-idx="${idx}"]`);
       const vid = card && card.querySelector('video');
       if (vid) { vid.removeAttribute('poster'); vid.src = fileUrl(clip.output_file, true); vid.load(); }
       saveCurrentProjectSilently();
       playSuccessSound();
       showToast(`🧹 ${data.message || 'Fillers removed'}`, 'success');
+      showResults(generatedClips);
     } else {
       showAlert(`Filler removal failed: ${data.detail || 'error'}`);
     }
@@ -532,7 +535,7 @@ document.getElementById('translate-go')?.addEventListener('click', async () => {
     const body = { srt_path: translateClip.srt_path, target_lang: lang };
     if (burn) {
       body.burn = true;
-      body.source_video = selectedVideo;
+      body.source_video = translateClip.source_file || selectedVideo;
       body.start_seconds = translateClip.start_time;
       body.end_seconds = translateClip.end_time;
       body.aspect_ratio = document.getElementById('clip-aspect-ratio')?.value || '9:16';
