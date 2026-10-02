@@ -118,6 +118,7 @@ def remove_silence(
             "cut_duration": round(orig_dur, 2),
             "time_saved": 0.0,
             "silence_intervals": [],
+            "kept_ranges": [[0.0, orig_dur]],
             "message": "No dead air detected exceeding threshold."
         }
 
@@ -173,6 +174,7 @@ def remove_silence(
         "time_saved": saved,
         "silence_intervals": silences,
         "segments_kept": len(speech_segs),
+        "kept_ranges": speech_segs,
         "message": f"Successfully removed {saved}s of dead air."
     }
 

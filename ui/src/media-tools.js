@@ -65,6 +65,9 @@ async function refreshMediaCache(clear=false) {
   }catch(error){label.textContent=error.message;}finally{button.disabled=false;}
 }
 document.addEventListener('DOMContentLoaded',()=>{
+  const open=document.createElement('button');open.id='media-cache-open';open.className='btn btn-small';open.textContent='Open cache folder';
+  document.getElementById('media-cache-refresh')?.after(open);
+  open.onclick=async()=>{open.disabled=true;try{const r=await fetch(`${serverUrl}/media/cache`);const data=await r.json();if(!r.ok)throw new Error(data.detail||'Could not locate cache');if(!window.clipperAPI?.revealInFolder)throw new Error('Open the desktop app to browse the cache folder.');await window.clipperAPI.revealInFolder(data.path);}catch(error){document.getElementById('media-cache-status').textContent=error.message;}finally{open.disabled=false;}};
   document.getElementById('inspect-audio-tracks')?.addEventListener('click',inspectSourceTracks);
   document.getElementById('media-cache-refresh')?.addEventListener('click',()=>refreshMediaCache());
   document.getElementById('media-cache-clear')?.addEventListener('click',()=>refreshMediaCache(true));

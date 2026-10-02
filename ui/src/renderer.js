@@ -790,7 +790,15 @@ function bindEvents() {
   // Generated clips own the caption controls; keep the legacy generation
   // preset synchronized so an initial render and later edits use one setting.
   const generatedPreset = document.getElementById('generated-caption-preset');
-  generatedPreset?.addEventListener('change', refreshCaptionPreview);
+  generatedPreset?.addEventListener('change', () => {
+    const look = CAPTION_PREVIEW[generatedPreset.value] || CAPTION_PREVIEW.viral_yellow;
+    for (const [id,value] of Object.entries({'caption-primary-color':look.text,'caption-highlight-color':look.accent,'caption-outline-color':look.back})) document.getElementById(id).value=value;
+    const font=document.getElementById('caption-font-name'),name=look.font.split(',')[0].trim();
+    if([...font.options].some(option=>option.value===name))font.value=name;
+    enableSelectedCaptions();
+    refreshCaptionPreview();
+    saveCurrentProjectSilently();
+  });
   const generatedFontSize = document.getElementById('generated-caption-font-size');
   if (generatedFontSize) {
     const label = document.getElementById('generated-caption-font-size-label');
@@ -1144,21 +1152,8 @@ async function handleBatchVideoDrop(files) {
   // First video is opened in the editor view
   selectVideoFile(files[0]);
   
-  // Submit all files sequentially to the backend queue. Read the option
-  // controls ONCE, with null-safe access and the same element IDs the single
-  // clip path uses (the old code read a non-existent #aspect-ratio and threw).
-  const val = (id, fallback) => document.getElementById(id)?.value ?? fallback;
-  const checked = (id) => !!document.getElementById(id)?.checked;
-  const payloadBase = {
-    aspect_ratio: val('clip-aspect-ratio', '9:16'),
-    whisper_model: val('whisper-model', 'base'),
-    use_audio_energy: checked('audio-energy'),
-    use_llm: checked('use-llm'),
-    burn_captions: checked('burn-captions'),
-    remove_silence: checked('remove-silence'),
-    bleep_profanity: checked('censor-profanity'),
-    caption_style: val('generated-caption-preset', 'viral_yellow'),
-  };
+  // Use the same complete style and processing settings as single-video jobs.
+  const payloadBase = buildProcessPayload();
 
   let queuedCount = 0;
   for (const file of files) {
@@ -1180,11 +1175,17 @@ async function handleBatchVideoDrop(files) {
 }
 
 function readProjects() {
+  if (typeof KlipzyProjects !== 'undefined') {
+    try { return KlipzyProjects.read(localStorage, PROJECTS_KEY); }
+    catch(error) { window.projectStorageError=error.message; return []; }
+  }
   try { return JSON.parse(localStorage.getItem(PROJECTS_KEY) || '[]'); }
   catch (_) { return []; }
 }
 
 function writeProjects(projects) {
+  if (window.projectStorageError) throw new Error(window.projectStorageError);
+  if (typeof KlipzyProjects !== 'undefined') { KlipzyProjects.write(localStorage, PROJECTS_KEY, projects); return; }
   localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects));
 }
 
@@ -1362,24 +1363,31 @@ function collectBrandKit() {
   });
   return data;
 }
+function enableSelectedCaptions() {
+  const captions=document.getElementById('burn-captions');if(captions)captions.checked=true;
+  if(typeof syncAutoHighlightControls==='function')syncAutoHighlightControls();
+}
 function applyBrandKit(settings) {
   const entries = Object.entries(settings || {}).filter(([id]) => BRAND_KIT_FIELDS.includes(id));
   entries.forEach(([id, val]) => {
     const el = document.getElementById(id);
     if (!el) return;
     if (el.type === 'checkbox') el.checked = !!val; else el.value = val;
-    el.dispatchEvent(new Event('change', { bubbles: true }));
-    el.dispatchEvent(new Event('input', { bubbles: true }));
   });
-  // Preset change handlers set defaults. Restore every saved override after those handlers.
-  entries.forEach(([id, val]) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    if (el.type === 'checkbox') el.checked = !!val; else el.value = val;
-    el.dispatchEvent(new Event('input', { bubbles: true }));
-  });
+  // Apply the saved look atomically: preset/default handlers must not overwrite it.
+  for(const id of ['generated-caption-font-size','generated-intro-font-size','caption-outline-width','intro-outline-width']){
+    const control=document.getElementById(id),label=document.getElementById(id+'-label');if(control&&label)label.textContent=control.value;
+  }
+  for(const [target,source] of [['caption-preset','generated-caption-preset'],['caption-preview-font-size','generated-caption-font-size']]){
+    const control=document.getElementById(target);if(control)control.value=document.getElementById(source).value;
+  }
+  const previewLabel=document.getElementById('caption-preview-font-size-label');if(previewLabel)previewLabel.textContent=document.getElementById('generated-caption-font-size').value;
+  for(const id of ['trim-layout','clip-aspect-ratio','vertical-crop'])document.getElementById(id)?.dispatchEvent(new Event('change',{bubbles:true}));
+  enableSelectedCaptions();
   if (typeof refreshCaptionPreview === 'function') refreshCaptionPreview();
   if (typeof refreshIntroPreview === 'function') refreshIntroPreview();
+  document.querySelectorAll('[data-preset]').forEach(tile=>tile.setAttribute('aria-pressed',String(tile.dataset.preset===document.getElementById('generated-caption-preset').value)));
+  saveCurrentProjectSilently();
   showToast('Brand kit applied ✅', 'success');
 }
 function loadBrandKitList() {
@@ -2584,6 +2592,7 @@ function buildClipCard(clip, idx) {
           <button class="btn btn-small" data-action="overlay" title="Add B-roll video cutaway or reaction image">🎭 B-Roll</button>
           <button class="btn btn-small" data-action="snip-silence" title="Auto-cut dead air pauses">✂️ Snip Silence</button>
           <button class="btn btn-small" data-action="remove-fillers" title="Cut filler words (um, uh…) + dead air using the transcript">🧹 Fillers</button>
+          ${clip.cut_history?.length ? '<button class="btn btn-small" data-action="undo-cut">Undo last cut</button>' : ''}
           <button class="btn btn-small" data-action="translate" title="Translate this clip's captions to another language (local AI)">🌐 Translate</button>
           <button class="btn btn-small" data-action="speakers" title="Detect who spoke when (optional — needs pyannote)">🗣 Speakers</button>
           <button class="btn btn-small" data-action="bleep" title="Bleep or mute profanity">🔇 Bleep</button>
@@ -2741,6 +2750,12 @@ function buildClipCard(clip, idx) {
       case 'overlay': openOverlayModal(idx2); break;
       case 'snip-silence': quickCutSilence(idx2); break;
       case 'remove-fillers': quickRemoveFillers(idx2, actionBtn); break;
+      case 'undo-cut': {
+        const history = generatedClips[idx2].cut_history || [];
+        const previous = history.pop();
+        if (previous) { generatedClips[idx2] = {...previous, cut_history:history}; saveCurrentProjectSilently(); showResults(generatedClips); }
+        break;
+      }
       case 'translate': openTranslateModal(idx2); break;
       case 'speakers': detectSpeakers(idx2, actionBtn); break;
       case 'bleep': quickBleepClip(idx2); break;
@@ -3885,6 +3900,9 @@ function closeQueueModal() {
 
 document.getElementById('open-queue-btn')?.addEventListener('click', openQueueModal);
 document.getElementById('close-queue-modal')?.addEventListener('click', closeQueueModal);
+document.getElementById('queue-modal')?.addEventListener('click', (event) => {
+  if (event.target === event.currentTarget) closeQueueModal();
+});
 document.getElementById('refresh-queue-btn')?.addEventListener('click', refreshQueueList);
 
 async function refreshQueueList() {

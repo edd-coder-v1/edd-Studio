@@ -74,9 +74,8 @@ def detect_hw_encoder() -> Tuple[str, List[str]]:
             _HW_ENCODER_CACHE = ("h264_amf", ["-quality", "speed", "-rc", "cqp", "-qp_i", "22", "-qp_p", "22"])
             return _HW_ENCODER_CACHE
         # 5. Linux VAAPI
-        elif "h264_vaapi" in stdout:
-            _HW_ENCODER_CACHE = ("h264_vaapi", [])
-            return _HW_ENCODER_CACHE
+        # VAAPI needs an explicit device/upload graph. Until that path is
+        # configured, use the working CPU encoder rather than a doomed attempt.
     except Exception:
         pass
 

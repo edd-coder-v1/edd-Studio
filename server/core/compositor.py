@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from server.core import proc
+from server.core.reliability import serial_heavy
 from server.core.edit_spec import normalize_spec, tracks_of_kind
 from server.core.ffmpeg_tools import (
     CROP_RATIOS,
@@ -478,6 +479,7 @@ def build_export_command(
     return cmd, burn_cwd
 
 
+@serial_heavy
 def render(
     spec: Dict[str, Any],
     output_path: str,
@@ -488,6 +490,8 @@ def render(
     """Normalize + compile + run. Returns the output path. Raises on failure;
     a job cancel surfaces as proc.CancelledError (and the partial is removed)."""
     ns = normalize_spec(spec)
+    if sum(len(t.get('clips', [])) for t in tracks_of_kind(ns, 'video'))>1:
+        raise ValueError('This editor exports one source clip. Use Multicamera for a reviewed multi-camera sequence.')
     output_path = str(Path(output_path).expanduser().resolve())
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
 

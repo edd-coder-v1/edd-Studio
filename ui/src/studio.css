@@ -123,6 +123,8 @@ h2 { font-size:20px; letter-spacing:-.3px; } h3 { font-size:15px; font-weight:60
 #editor-modal .editor-ratio-chips,#editor-modal .editor-filter-chips { gap:5px; }
 #editor-modal .ratio-chip,#editor-modal .filter-chip { border-radius:4px; font-size:11px; padding:7px 9px; }
 .studio-settings-nav { display:flex; flex-wrap:wrap; gap:8px; position:sticky; top:-28px; z-index:5; padding:12px 0; background:var(--bg); margin-bottom:16px; border-bottom:1px solid var(--border); }
+.studio-settings-nav h2 { flex-basis:100%; margin:0 0 4px; font-size:14px; }
+#view-setup .media-cache-panel { margin-top:18px; margin-bottom:0; }
 #view-setup > .card { scroll-margin-top:70px; }
 #view-setup .card-head-row { align-items:center; gap:14px; }
 .setup-rec-grid { gap:10px; }

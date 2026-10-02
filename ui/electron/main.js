@@ -6,7 +6,7 @@ const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const net = require('net');
-const { decideQuit } = require('./ollama-shutdown');
+const { decideQuit, stopOllama } = require('./ollama-shutdown');
 const { compatibleBackend } = require('./backend-identity');
 let quitApproved = false, quitPromptPending = false;
 const crypto = require('crypto');
@@ -39,6 +39,7 @@ function findPython() {
   // python.exe paths were tried first on macOS/Linux, spawning and failing with
   // a scary "EACCES" line before falling back — build the right list per-OS.
   const winVenv = [
+    ...(typeof app !== 'undefined' && app.isPackaged ? [path.join(process.resourcesPath,'runtime','python.exe')] : []),
     path.join(__dirname, '..', '..', '.venv', 'Scripts', 'python.exe'),   // Windows dev venv
     path.join(__dirname, '..', '..', 'venv', 'Scripts', 'python.exe'),    // Legacy Windows dev venv
     path.join(process.resourcesPath || '', 'venv', 'Scripts', 'python.exe'), // Windows packaged
@@ -117,6 +118,11 @@ async function startServer() {
         stdio: 'pipe',
         env: {
           ...process.env,
+          ...(app.isPackaged ? {
+            KLIPZY_DATA_DIR: app.getPath('userData'),
+            KLIPZY_LOG_DIR: path.join(app.getPath('userData'),'logs'),
+            KLIPZY_OUTPUT_DIR: path.join(app.getPath('userData'),'output'),
+          } : {}),
           PYTHONUNBUFFERED: '1',
           KLIPZY_API_TOKEN: API_TOKEN,
           KLIPZY_PORT: String(SERVER_PORT),
@@ -290,12 +296,17 @@ ipcMain.handle('restart-app', async () => {
 });
 
 ipcMain.handle('server-status', () => serverStatus);
+ipcMain.handle('stop-ollama', async()=>{
+  const choice=await dialog.showMessageBox(mainWindow,{type:'question',title:'Stop Ollama?',message:'Stop the local Ollama service?',detail:'This interrupts AI requests in Klipzy and other apps using Ollama. Installed models stay on disk.',buttons:['Cancel','Stop Ollama'],defaultId:0,cancelId:0});
+  if(choice.response!==1)return {cancelled:true};
+  try{await stopOllama();return {ok:true};}catch(error){return {ok:false,error:error.message};}
+});
 ipcMain.handle('server-url', () => `http://127.0.0.1:${SERVER_PORT}`);
 
 async function getEffectiveApiToken() {
   if (!reusedExistingServer) return API_TOKEN;
   const fs = require('fs');
-  const root = app.isPackaged ? process.resourcesPath : path.join(__dirname, '..', '..');
+  const root = app.isPackaged ? app.getPath('userData') : path.join(__dirname, '..', '..');
   try {
     return fs.readFileSync(path.join(root, 'logs', 'api_token.txt'), 'utf8').trim();
   } catch (_) { return ''; }

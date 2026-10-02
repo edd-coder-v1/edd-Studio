@@ -379,7 +379,7 @@ def get_install_commands() -> Dict[str, List[str]]:
         commands["ollama"] = ["brew", "install", "--cask", "ollama"]
     else:
         commands["ffmpeg"] = ["sudo", "apt", "install", "-y", "ffmpeg"]
-        commands["ollama"] = ["curl", "-fsSL", "https://ollama.com/install.sh", "|", "sh"]
+        commands["ollama"] = ["sh", "-c", "script=$(mktemp) && curl -fsSL https://ollama.com/install.sh -o \"$script\" && sh \"$script\"; result=$?; rm -f \"$script\"; exit $result"]
 
     # CRITICAL: use THIS interpreter's pip (sys.executable -m pip), not a bare
     # "pip" off PATH. The server runs inside the app's venv; a bare "pip" can
@@ -688,7 +688,7 @@ OLLAMA_MODEL_CATALOG = [
     {"name": "llama3.2:3b", "label": "Llama 3.2 · 3B", "params": "3B",   "size_gb": 2.0, "min_ram_gb": 8,  "tier": "Light",
      "note": "Balanced quality and speed; solid all-rounder."},
     {"name": "qwen2.5:3b",  "label": "Qwen2.5 · 3B",   "params": "3B",   "size_gb": 1.9, "min_ram_gb": 8,  "tier": "Light",
-     "note": "Strong small model for punchy copywriting."},
+     "note": "Qwen Research license; review its restrictions before use. Not an Apache-2.0 model."},
     {"name": "phi3:mini",   "label": "Phi-3 Mini",     "params": "3.8B", "size_gb": 2.2, "min_ram_gb": 8,  "tier": "Light",
      "note": "Compact but capable; good on modest hardware."},
     {"name": "gemma2:9b",   "label": "Gemma 2 · 9B",   "params": "9B",   "size_gb": 5.4, "min_ram_gb": 16, "tier": "Quality",
@@ -772,6 +772,10 @@ _MODEL_LICENSES = {
 
 def _model_license(name: str) -> str:
     """License label for a model name, matched on its family prefix."""
+    if name.startswith('qwen2.5:3b'):
+        return 'Qwen Research (commercial use requires separate permission)'
+    if name.startswith('qwen2.5:72b'):
+        return 'Qwen License (not Apache-2.0)'
     fam = name.split(":")[0]
     return _MODEL_LICENSES.get(fam, "")
 
@@ -892,17 +896,18 @@ def ollama_model_catalog(preset: str = "") -> Dict:
     model installed/recommended and whether the machine has enough RAM/VRAM.
     """
     recommended = recommend_ollama_model(preset)
-    installed = list_ollama_models()
-    installed_set = set(installed) | {m.split(":")[0] for m in installed}
+    inventory = ollama_disk_inventory()
+    installed = inventory["models"]
+    installed_set = set(installed) | {m[:-7] for m in installed if m.endswith(":latest")}
     ram = detect_cpu().get("ram_gb") or 0
     vram = detect_gpu().get("vram_gb") or 0
     models = []
     for m in OLLAMA_MODEL_CATALOG:
         present = m["name"] in installed_set
-        health = cached_model_health(m["name"]) if present else "not_installed"
+        health = "files_present" if present else "not_installed"
         models.append({
             **m,
-            "installed": present and health != "repair_needed",
+            "installed": present,
             "health": health,
             "recommended": m["name"] == recommended,
             "fits_ram": (not ram) or (ram >= m["min_ram_gb"]),
@@ -914,10 +919,71 @@ def ollama_model_catalog(preset: str = "") -> Dict:
             "license": _model_license(m["name"]),
         })
     return {"models": models, "recommended": recommended, "installed": installed,
+            "model_files": inventory.get("model_files", {}),
             "ram_gb": ram, "vram_gb": vram}
 
 
-def list_ollama_models() -> List[str]:
+def ollama_models_root():
+    from pathlib import Path
+    return Path(os.environ.get("OLLAMA_MODELS") or Path.home() / ".ollama" / "models").expanduser().resolve()
+
+
+def ollama_disk_inventory() -> Dict:
+    """Read manifests and stat referenced blobs; never launch Ollama or download.
+
+    File sizes establish presence, not checksum integrity or inference capability.
+    Orphan blobs and unfinished downloads do not count as installed models.
+    """
+    import json
+    from pathlib import Path
+    root = ollama_models_root()
+    manifests = root / "manifests"
+    result = {"source": "disk", "path": str(root), "models": [], "incomplete": [], "model_files": {}}
+    try:
+        manifests.stat()
+    except FileNotFoundError:
+        return result
+    def walk_error(error):
+        raise error
+    for directory, _, files in os.walk(manifests, onerror=walk_error):
+        for filename in files:
+            manifest = Path(directory) / filename
+            parts = manifest.relative_to(manifests).parts
+            if len(parts) < 4:
+                continue
+            registry, namespace, *name_parts, tag = parts
+            name = "/".join(name_parts) + ":" + tag
+            if namespace != "library" or registry != "registry.ollama.ai":
+                name = namespace + "/" + name
+            if registry != "registry.ollama.ai":
+                name = registry + "/" + name
+            try:
+                with manifest.open(encoding="utf-8") as handle:
+                    data = json.load(handle)
+                layers = data.get("layers", [])
+                if not layers or not any(layer.get("mediaType", "").startswith("application/vnd.ollama.image.model") for layer in layers):
+                    raise ValueError("No local model weights listed")
+                for entry in [data["config"], *layers]:
+                    digest, size = entry["digest"], entry["size"]
+                    if not isinstance(digest, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+                        raise ValueError("Invalid blob reference")
+                    if not isinstance(size, int) or size < 0:
+                        raise ValueError("Invalid blob size")
+                    blob = root / "blobs" / digest.replace(":", "-")
+                    if not blob.is_file() or blob.stat().st_size != size:
+                        raise ValueError("Missing or incomplete model files")
+                result["models"].append(name)
+                result["model_files"][name] = [str(root / "blobs" / layer["digest"].replace(":", "-"))
+                    for layer in layers if layer.get("mediaType", "").startswith("application/vnd.ollama.image.model")]
+            except PermissionError:
+                raise
+            except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:
+                result["incomplete"].append({"name": name, "reason": str(error)})
+    result["models"] = sorted(set(result["models"]))
+    return result
+
+
+def list_ollama_models(raise_on_error: bool = False) -> List[str]:
     """Verified inventory from the running local Ollama service, without CLI startup."""
     import json
     import urllib.request
@@ -925,13 +991,19 @@ def list_ollama_models() -> List[str]:
         request = urllib.request.Request("http://127.0.0.1:11434/api/tags")
         with urllib.request.urlopen(request, timeout=2) as response:
             payload = json.load(response)
+        if not isinstance(payload,dict) or not isinstance(payload.get('models'),list):
+            raise ValueError('Ollama returned an invalid model inventory')
         return sorted({item["name"] for item in payload.get("models", [])
                        if isinstance(item, dict) and isinstance(item.get("name"), str)})
     except Exception:
+        if raise_on_error:raise
         # `ollama list` may launch a background service that inherits stdout on
         # Windows, keeping subprocess pipes open after the timeout. Never start
-        # services merely to populate a dropdown; an unavailable inventory is empty.
-        return []
+        # services merely to populate a dropdown. Fall back to on-disk metadata.
+        try:
+            return ollama_disk_inventory()["models"]
+        except OSError:
+            return []
 
 
 def resolve_default_ollama_model(preset: str = "") -> str:

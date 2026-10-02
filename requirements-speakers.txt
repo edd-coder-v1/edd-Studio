@@ -1,0 +1,6 @@
+# Optional local speaker-follow experiments; no cloud API or credentials.
+# After base requirements: python -m pip install --no-deps -r requirements-speakers.txt
+# webrtcvad-wheels provides the webrtcvad module on Windows without a C compiler.
+# Upstream Resemblyzer metadata names the old source-only webrtcvad distribution.
+resemblyzer==0.1.4
+webrtcvad-wheels==2.0.14

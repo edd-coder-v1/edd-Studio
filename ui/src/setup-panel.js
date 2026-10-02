@@ -2,15 +2,59 @@ let setupRecommendations = null;
 let selectedOllamaModel = "";
 let localModelSaving = false, localModelRevision = 0;
 let localModelLoading = false;
+let localOllamaStarting = false;
+let localOllamaStopping = false;
+let localOllamaStatus = null;
+let modelCatalogDetails=[];
+let installedLocalModels=null;
+async function openModelFolder(kind,model='',fileIndex=0){
+  try{
+    const response=await fetch(`${serverUrl}/api/setup/model-folder?kind=${encodeURIComponent(kind)}&model=${encodeURIComponent(model)}&file_index=${fileIndex}`,{signal:AbortSignal.timeout(10000)});
+    const data=await response.json();if(!response.ok)throw Error(data.detail||'Could not locate model folder');
+    if(!window.clipperAPI?.revealInFolder)throw Error('Opening folders requires the desktop app.');
+    await window.clipperAPI.revealInFolder(data.path);
+  }catch(error){showToast(error.message,'error');}
+}
+function showLocalModelDownload(model){
+  const grid=document.getElementById('model-catalog');
+  for(let parent=grid.parentElement;parent;parent=parent.parentElement)if(parent.tagName==='DETAILS')parent.open=true;
+  const card=[...grid.querySelectorAll('[data-local-model]')].find(el=>sameLocalModel(el.dataset.localModel,model));
+  (card||grid).scrollIntoView({behavior:'smooth',block:'center'});
+  showToast(`${model} is not downloaded. Use its Download button when you choose.`, 'info');
+}
+const sameLocalModel=(a,b)=>a&&b&&(a===b||a.replace(/:latest$/,'')===b.replace(/:latest$/,''));
+function modelOptionLabel(name){
+  const m=modelCatalogDetails.find(item=>sameLocalModel(item.name,name));
+  return m?`${name} · ${m.tier||'Local'} · ${m.fits_ram===false?'Needs more RAM':m.fits_vram?'Fits GPU':'CPU/RAM'}`:name+' · Hardware estimate unavailable';
+}
+function highlightModelChoice(){
+  document.querySelectorAll('.model-card[data-local-model]').forEach(card=>{
+    const active=!!sameLocalModel(card.dataset.localModel,selectedOllamaModel);card.classList.toggle('is-active',active);
+    const button=card.querySelector('[data-use]');if(button){button.classList.toggle('is-selected',active);button.textContent=active?(localModelSaving?'Saving…':'Selected'):'Use';button.disabled=localModelSaving||active;}
+    const marker=card.querySelector('[data-selection-label]');if(marker)marker.textContent=active?'● Selected for new requests':'';
+  });
+}
+function paintModelState(state, message) {
+  const busy=['starting','stopping','detecting','saving'].includes(state);
+  const badge=document.getElementById('sidebar-model-state');
+  if(badge){badge.dataset.state=state;badge.setAttribute('aria-busy',String(busy));badge.textContent=({starting:'Starting Ollama…',stopping:'Stopping Ollama…',detecting:'Detecting installed models…',saving:'Saving selection…',ready:'Ollama running',offline:'Ollama stopped',missing:'Ollama not installed',error:'Model check failed'})[state]||state;}
+  const status=document.getElementById('sidebar-model-status');if(status)status.textContent=message;
+  const refresh=document.getElementById('sidebar-refresh-models');
+  const stop=document.getElementById('sidebar-stop-ollama');if(stop){stop.hidden=localOllamaStatus?.running!==true;stop.disabled=busy||state==='stopping';stop.textContent=state==='stopping'?'Stopping Ollama…':'Stop Ollama';}
+  if(refresh){refresh.disabled=busy;refresh.textContent=state==='detecting'?'Detecting models…':'Refresh models';refresh.setAttribute('aria-busy',String(state==='detecting'));}
+  const start=document.getElementById('sidebar-start-ollama');
+  if(start){start.disabled=busy;start.textContent=state==='starting'?'Starting Ollama…':'Start Ollama';start.setAttribute('aria-busy',String(state==='starting'));start.hidden=!(state==='starting'||localOllamaStatus?.installed&&localOllamaStatus.running===false);}
+  for(const id of ['sidebar-ai-model','ai-ollama-model']){const select=document.getElementById(id);if(select){const hasModels=[...select.options].some(o=>o.value&&!o.disabled);if(busy&&!hasModels)select.innerHTML=`<option value="">${state==='starting'?'Starting Ollama…':'Detecting models…'}</option>`;select.disabled=busy||state==='error'||!hasModels;select.setAttribute('aria-busy',String(busy));}}
+}
+function installedModelOptions(models) {
+  const placeholder=models.includes(selectedOllamaModel)?'':`<option value="" selected>${models.length?'Select an installed model':'No installed models found'}</option>`;
+  return placeholder+models.map(m=>`<option value="${escapeHtml(m)}"${m===selectedOllamaModel?' selected':''}>${escapeHtml(modelOptionLabel(m))}</option>`).join('');
+}
 function syncSidebarModels(models) {
   const sidebar = document.getElementById('sidebar-ai-model');
   if (sidebar) {
-    if (models) sidebar.innerHTML = models.map(model => `<option value="${escapeHtml(model)}">${escapeHtml(model)}</option>`).join('');
-    if (models && !models.length) sidebar.innerHTML = '<option value="">No downloaded models — open Settings</option>';
-    if (selectedOllamaModel && ![...sidebar.options].some(option => option.value === selectedOllamaModel)) {
-      const missing = new Option(selectedOllamaModel + ' · not downloaded', selectedOllamaModel); missing.disabled = true; sidebar.add(missing);
-    }
-    sidebar.value = selectedOllamaModel;
+    if (models) sidebar.innerHTML = installedModelOptions(models);
+    sidebar.value = [...sidebar.options].some(o=>o.value===selectedOllamaModel)?selectedOllamaModel:'';
     sidebar.disabled = localModelSaving || ![...sidebar.options].some(option => option.value && !option.disabled);
     sidebar.onchange = () => chooseLocalModel(sidebar.value).catch(error => showToast(error.message,'error'));
   }
@@ -32,13 +76,15 @@ async function chooseLocalModel(model) {
   const previous = selectedOllamaModel;
   localModelSaving = true; localModelRevision++;
   selectedOllamaModel = model;
+  highlightModelChoice();
   renderRecommendations(setupRecommendations);
   syncSidebarModels();
   const status = document.getElementById('sidebar-model-status');
   if (status) status.textContent = 'Saving model selection…';
+  paintModelState('saving','Saving your choice. No model download or loading into memory is requested.');
   document.querySelectorAll('[data-model-kind="ollama"], [data-use], #ai-ollama-model').forEach(el => {el.disabled=true;});
   try {
-    const response = await fetch(`${serverUrl}/api/setup/ai-model`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind:'ollama',model})});
+    const response = await fetch(`${serverUrl}/api/setup/ai-model`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind:'ollama',model}),signal:AbortSignal.timeout(10000)});
     if (!response.ok) { const error = await response.json().catch(() => ({})); throw new Error(error.detail || 'Could not save model selection'); }
     if (status) status.textContent = 'Selected for the next local AI request. Loading occurs when used; running processing keeps its current model.';
     showToast(`${model} selected for new requests. It loads into memory when used.`, 'success');
@@ -48,9 +94,11 @@ async function chooseLocalModel(model) {
     throw error;
   } finally {
     localModelSaving = false;
+    highlightModelChoice();
     renderRecommendations(setupRecommendations);
     syncSidebarModels();
-    document.querySelectorAll('[data-use], #ai-ollama-model').forEach(el => {el.disabled=false;});
+    document.querySelectorAll('#ai-ollama-model').forEach(el => {el.disabled=false;});
+    highlightModelChoice();
     loadAiModels();
     renderModelCatalog();
   }
@@ -183,39 +231,52 @@ async function renderModelCatalog() {
     return;
   }
   const ollamaReady = !!(data.ollama && data.ollama.installed);
-  const active = data.active;
-  grid.innerHTML = (data.models || []).map((m) => {
-    const isActive = m.name === active;
+  modelCatalogDetails=data.models||[];
+  renderRecommendations(setupRecommendations);
+  for(const id of ['sidebar-ai-model','ai-ollama-model']){const select=document.getElementById(id);if(select)for(const option of select.options)if(option.value)option.textContent=modelOptionLabel(option.value);}
+  const active = selectedOllamaModel || data.active;
+  const models=[...(data.models||[])];
+  for(const name of data.installed||[])if(!models.some(m=>sameLocalModel(m.name,name)))models.push({name,label:name,installed:true,tier:'Local',note:'Downloaded on this computer. Hardware suitability has not been estimated for this model.'});
+  const renderCard = (m) => {
+    const isActive = sameLocalModel(m.name,active);
     const badges = [];
     if (m.recommended) badges.push('<span class="model-badge rec">⭐ Recommended</span>');
-    if (isActive) badges.push(`<span class="model-badge active">● ${m.installed ? 'In use' : 'Selected · download needed'}</span>`);
-    else if (m.installed) badges.push('<span class="model-badge dl">✓ Downloaded</span>');
+    badges.push(`<span class="model-badge active" data-selection-label>${isActive?'● Selected for new requests':''}</span>`);
+    if (!isActive && m.installed) badges.push('<span class="model-badge dl">✓ Downloaded</span>');
     if (m.tested) badges.push('<span class="model-badge tested" title="Has local test coverage; not a clip-quality certification">🧪 Tested</span>');
     if (m.license) badges.push('<span class="model-badge license" title="Model license">' + escapeHtml(m.license) + '</span>');
-    if (!m.fits_ram) badges.push('<span class="model-badge warn">Needs ' + m.min_ram_gb + 'GB+ RAM</span>');
+    if (m.fits_ram===false) badges.push('<span class="model-badge warn">Needs ' + m.min_ram_gb + 'GB+ RAM</span>');
 
     let actions;
     if (!m.installed) {
       actions = `<button class="btn btn-small btn-secondary" data-pull="${escapeHtml(m.name)}" ${ollamaReady ? '' : 'disabled'}>⬇️ Download (${m.size_gb}GB)</button>`;
     } else if (isActive) {
-      actions = `<button class="btn btn-small" disabled>● In use</button>` +
+      actions = `<button class="btn btn-small" data-use="${escapeHtml(m.name)}" disabled>Selected</button>` +
                 `<button class="btn btn-small btn-ghost" data-remove="${escapeHtml(m.name)}" title="Delete this model from disk">🗑</button>`;
     } else {
       actions = `<button class="btn btn-small btn-primary" data-use="${escapeHtml(m.name)}">Use</button>` +
                 `<button class="btn btn-small btn-ghost" data-remove="${escapeHtml(m.name)}" title="Delete this model from disk">🗑</button>`;
     }
+    if(m.installed)actions+=`<button class="btn btn-small" data-model-folder="${escapeHtml(m.name)}">Show model file</button>`;
+    const fileEntry=Object.entries(data.model_files||{}).find(([name])=>sameLocalModel(name,m.name));
+    const files=fileEntry?.[1]||[];
     return `
-      <div class="model-card${isActive ? ' is-active' : ''}">
+      <div class="model-card${isActive ? ' is-active' : ''}" data-local-model="${escapeHtml(m.name)}">
         <div class="model-card-top">
           <span class="model-name">${escapeHtml(m.label)}</span>
           <span class="model-tier">${escapeHtml(m.tier)}</span>
         </div>
         <div class="model-badges">${badges.join('')}</div>
         <div class="model-note muted small">${escapeHtml(m.note)}</div>
-        <div class="model-meta muted small">${escapeHtml(m.params)} · ~${m.size_gb}GB${m.installed ? ' · downloaded' : ' download'}${m.fits_vram ? ' · ⚡ fits your GPU' : ''}</div>
+        <div class="model-meta muted small">${m.params?escapeHtml(m.params)+' · ':''}${m.size_gb?'~'+m.size_gb+'GB · ':''}${m.installed ? 'Downloaded' : 'Available to download'}${m.fits_vram ? ' · ⚡ fits your GPU' : ''}</div>
+        ${files.length?`<details class="model-file-details"><summary>Model files (${files.length})</summary><p class="muted small">Ollama stores model weights using hashed filenames. Show model file selects the first weights file in your file browser.</p>${files.map(file=>`<code>${escapeHtml(file)}</code>`).join('')}</details>`:''}
         <div class="model-card-actions">${actions}</div>
       </div>`;
-  }).join('');
+  };
+  const installed=models.filter(m=>m.installed),available=models.filter(m=>!m.installed);
+  grid.innerHTML=`<h3 class="model-group-heading">Installed models (${installed.length})</h3><p class="model-group-description muted small">Downloaded on this computer. Choose Use to select one; start Ollama when you want to run it.</p>`+
+    (installed.map(renderCard).join('')||'<p class="model-group-description muted">No complete downloaded models found.</p>')+
+    '<h3 class="model-group-heading">Download catalog</h3><p class="model-group-description muted small">Optional models you can download. These are not currently installed as complete downloads.</p>'+available.map(renderCard).join('');
 
   if (!ollamaReady) {
     grid.insertAdjacentHTML('afterbegin',
@@ -224,15 +285,18 @@ async function renderModelCatalog() {
 
   // "Currently in use" banner at the very top so the active model is obvious.
   if (active) {
-    const am = (data.models || []).find((m) => m.name === active);
+    const am = models.find((m) => sameLocalModel(m.name,active));
     grid.insertAdjacentHTML('afterbegin',
-      `<div class="model-inuse-banner" style="grid-column:1/-1;">${am?.installed ? '🟢 <strong>In use:</strong>' : '<strong>Selected:</strong>'} ${escapeHtml(am ? am.label : active)} <span class="muted small">${am?.installed ? '— used for local AI hooks, titles &amp; chat.' : '— download this model below to use it locally.'}</span></div>`);
+      `<div class="model-inuse-banner" style="grid-column:1/-1;"><strong>Selected:</strong> ${escapeHtml(am ? am.label : active)} <span class="muted small">${am?.installed ? '— for new AI requests; loads into memory when used.' : '— download this model below to use it locally.'}</span></div>`);
   }
 
   // Transparency footnote (Clips-Kitty-style honesty): be clear about which
   // models we've actually measured vs. ones that just "should work".
   grid.insertAdjacentHTML('beforeend',
     '<p class="muted small" style="grid-column:1/-1; margin-top:6px;">🧪 <strong>Tested</strong> models were benchmarked for clip-selection quality on real footage (RTX 3060). The rest run the same way but haven\'t been measured for pick quality. License badges are best-effort — verify terms before commercial use.</p>');
+  grid.insertAdjacentHTML('beforeend','<div class="model-service-actions" style="grid-column:1/-1"><button class="btn btn-small" data-ollama-folder>Open Ollama models folder</button><button class="btn btn-small" data-whisper-folder>Open selected Whisper model folder</button></div>');
+  grid.querySelector('[data-ollama-folder]').onclick=()=>openModelFolder('ollama');
+  grid.querySelector('[data-whisper-folder]').onclick=()=>openModelFolder('whisper',document.getElementById('whisper-model')?.value||'base');
 
   grid.querySelectorAll('[data-pull]').forEach((btn) => {
     btn.addEventListener('click', () => startModelPull(btn.dataset.pull, btn));
@@ -243,6 +307,7 @@ async function renderModelCatalog() {
       chooseLocalModel(btn.dataset.use).catch(error => showToast(error.message,'error'));
     });
   });
+  grid.querySelectorAll('[data-model-folder]').forEach(btn=>btn.addEventListener('click',()=>openModelFolder('ollama',btn.dataset.modelFolder)));
 
   grid.querySelectorAll('[data-remove]').forEach((btn) => {
     btn.addEventListener('click', async () => {
@@ -436,43 +501,53 @@ function initWhisperModelSync() {
 }
 
 // Populate + wire the "Change AI models" selectors.
-async function loadAiModels(statusData) {
-  if (localModelLoading) return;
+async function loadAiModels(statusData, afterStart=false) {
+  if (localModelLoading || localModelSaving || localOllamaStopping || localOllamaStarting&&!afterStart) return;
   localModelLoading = true;
   // Keep both Whisper selects and the saved preference in lockstep.
   initWhisperModelSync();
+  window.KlipzyQualityDownloads?.refresh();
+  // Transcription controls must work even when Ollama is stopped or unreachable.
+  syncSidebarModels();
 
   // Ollama model: list what's installed locally, let the user pick the active one.
   const ollamaSel = document.getElementById('ai-ollama-model');
   if (!ollamaSel) { localModelLoading = false; return; }
+  paintModelState('detecting','Checking downloaded models and Ollama service status separately. No downloads.');
+  let stale=false;
   try {
     const revision = localModelRevision;
-    const res = await fetch(`${serverUrl}/api/setup/ai-models`, {signal: AbortSignal.timeout(10000)});
-    if (!res.ok) throw new Error();
-    const data = await res.json();
-    if (localModelSaving || revision !== localModelRevision) return;
-    const models = data.installed_ollama_models || [];
+    let res = await fetch(`${serverUrl}/api/setup/ai-models`, {signal: AbortSignal.timeout(10000),cache:'no-store'});
+    if (!res.ok) {const error=await res.json().catch(()=>({}));throw new Error(error.detail||`Klipzy could not check the model list (${res.status}).`);}
+    let data = await res.json();
+    // Ollama may expose its port before its initial disk inventory is ready.
+    for(let retry=0;retry<2&&data.inventory?.source!=='disk'&&data.ollama_status?.running&&!(data.installed_ollama_models||[]).length;retry++){
+      await new Promise(resolve=>setTimeout(resolve,750));
+      res=await fetch(`${serverUrl}/api/setup/ai-models`,{signal:AbortSignal.timeout(10000),cache:'no-store'});
+      if(!res.ok)throw new Error('Model detection failed. Refresh to retry.');data=await res.json();
+    }
+    if (localModelSaving || revision !== localModelRevision) {stale=true;return;}
+    const models = [...new Set((data.installed_ollama_models || []).filter(m=>typeof m==='string'&&m))];
+    installedLocalModels=models;
     const active = data.ollama;
+    const offline=data.ollama_status?.running===false;
+    localOllamaStatus=data.ollama_status||{installed:true,running:true};
+    const startButton=document.getElementById('sidebar-start-ollama');
+    if(startButton)startButton.hidden=!(offline && data.ollama_status?.installed);
     selectedOllamaModel = active || "";
     syncSidebarModels(models);
     renderRecommendations(setupRecommendations);
+    highlightModelChoice();
+    renderModelCatalog();
     const status = document.getElementById('sidebar-model-status');
-    if (status) status.textContent = models.length ? `${models.length} downloaded model(s). Selection applies to new requests; models load into memory when used.` : 'No downloaded models found. Start Ollama or download a model in Settings, then refresh.';
-    if (!models.length) {
-      const installed = statusData && statusData.ollama && statusData.ollama.installed;
-      ollamaSel.innerHTML = active
-        ? `<option value="${escapeHtml(active)}" selected>${escapeHtml(active)} (selected · download needed)</option>`
-        : `<option value="">${installed ? 'No models pulled yet — use “Pull model”' : 'Ollama not installed'}</option>`;
-      ollamaSel.disabled = true;
-    } else {
-      ollamaSel.disabled = false;
-      ollamaSel.innerHTML = models.map((m) =>
-        `<option value="${escapeHtml(m)}"${m === active ? ' selected' : ''}>${escapeHtml(m)}</option>`
-      ).join('');
-      if (active && !models.includes(active)) {
-        ollamaSel.insertAdjacentHTML('afterbegin', `<option value="${escapeHtml(active)}" selected>${escapeHtml(active)} (selected · download needed)</option>`);
-      }
-    }
+    ollamaSel.innerHTML=installedModelOptions(models);
+    if(offline){
+      const label=localOllamaStatus.installed?'Ollama stopped':'Ollama not installed';
+      if(!models.length)for(const id of ['sidebar-ai-model','ai-ollama-model']){const select=document.getElementById(id);if(select)select.innerHTML=`<option value="">No complete models found · ${label}</option>`;}
+      const incomplete=data.inventory?.incomplete||[];
+      const detail=incomplete.length?` Incomplete or unsupported entries: ${incomplete.map(m=>m.name).join(', ')}.`:'';
+      paintModelState(localOllamaStatus.installed?'offline':'missing',`${models.length} downloaded model(s) found on disk. You can choose a model while Ollama is stopped; start Ollama to run it.${detail}${data.inventory?.path?' Checked: '+data.inventory.path:''}`);
+    }else paintModelState('ready',models.length?`${models.length} installed model(s) detected on disk. ${models.includes(active)?'Selected: '+active+'.':'Choose a model.'} A model loads into memory only when used.`:'Ollama is running. No complete downloaded models were found in the checked folder.');
     if (!ollamaSel.dataset.bound) {
       ollamaSel.dataset.bound = '1';
       ollamaSel.addEventListener('change', async () => {
@@ -480,16 +555,32 @@ async function loadAiModels(statusData) {
         chooseLocalModel(ollamaSel.value).catch(error => showToast(error.message,'error'));
       });
     }
-  } catch (_) {
+  } catch (error) {
     ollamaSel.innerHTML = '<option value="">Could not reach Ollama</option>';
     ollamaSel.disabled = true;
     const sidebar = document.getElementById('sidebar-ai-model');
     if (sidebar) { sidebar.innerHTML = '<option value="">Model list unavailable — refresh</option>'; sidebar.disabled = true; }
     const status = document.getElementById('sidebar-model-status');
-    if (status) status.textContent = 'Could not list local models. Check Ollama and press Refresh models.';
-  } finally { localModelLoading = false; }
+    paintModelState('error',`Could not detect installed models. ${error.name==='TimeoutError'?'The check timed out.':error.message||'Check the Klipzy engine connection.'} Press Refresh models to retry. No downloads were started.`);
+  } finally { localModelLoading = false;if(stale&&!localModelSaving)queueMicrotask(()=>loadAiModels()); }
 }
 document.getElementById('sidebar-refresh-models')?.addEventListener('click', () => loadAiModels());
+(()=>{const refresh=document.getElementById('sidebar-refresh-models'),stop=document.getElementById('sidebar-stop-ollama');if(refresh&&stop){const row=document.createElement('div');row.className='model-service-actions';refresh.before(row);row.append(refresh,stop);}})();
+document.getElementById('sidebar-stop-ollama')?.addEventListener('click',async()=>{
+  if(localModelLoading||localModelSaving||localOllamaStarting||localOllamaStopping)return;
+  if(!window.clipperAPI?.stopOllama){paintModelState('error','Stop Ollama from its tray menu, or use the Klipzy desktop app.');return;}
+  localOllamaStopping=true;paintModelState('stopping','Stopping Ollama leaves your downloaded models on disk.');
+  try{const result=await window.clipperAPI.stopOllama();if(!result.cancelled&&!result.ok)throw new Error(result.error||'Could not stop Ollama');localOllamaStopping=false;await loadAiModels();}catch(error){paintModelState('error',error.message);}finally{localOllamaStopping=false;}
+});
+document.getElementById('sidebar-start-ollama')?.addEventListener('click', async()=>{
+  if(localOllamaStarting||localModelLoading||localModelSaving)return;
+  localOllamaStarting=true;
+  const button=document.getElementById('sidebar-start-ollama'),status=document.getElementById('sidebar-model-status');
+  paintModelState('starting','Starting the installed Ollama service. Next: detect your existing models. No downloads.');
+  try{const response=await fetch(`${serverUrl}/api/setup/ollama/start`,{method:'POST',signal:AbortSignal.timeout(12000)});const data=await response.json();if(!response.ok)throw new Error(data.detail||'Could not start Ollama');await loadAiModels(undefined,true);}
+  catch(error){paintModelState('error',`${error.name==='TimeoutError'?'Ollama startup timed out.':error.message} Refresh to check again. No downloads were started.`);}
+  finally{localOllamaStarting=false;button.disabled=false;}
+});
 window.addEventListener('focus', () => { if (typeof backendState !== 'undefined' && backendState === 'ready') loadAiModels(); });
 
 let supportLinks = {};
@@ -520,7 +611,7 @@ function openSettings() {
 // Support TechFreq: open the best available external link (my links hub, else
 // donate). If we don't have the URLs yet, fall back to the Setup support card.
 function openSupport() {
-  const url = supportLinks.beacons || supportLinks.paypal || supportLinks.star;
+  const url = 'https://paypal.me/techfreq';
   if (url && window.open) {
     window.open(url, '_blank', 'noopener');
     return;
@@ -711,7 +802,7 @@ function renderRecommendations(recs) {
   if (!recs) return;
   const items = [
     { key: 'whisper', name: '🎤 Whisper (transcription)', ...recs.whisper },
-    { key: 'yolo', name: '👁️ YOLO (face tracking)', ...recs.yolo },
+    { key: 'yolo', name: '👁️ Local face framing', ...recs.yolo, model:'OpenCV + YuNet', engine:'CPU', realtime_factor:'', note:'Bundled MIT-licensed face detector. Review framing for profiles, small faces, and groups.' },
     { key: 'ollama', name: '🤖 Ollama (AI edit chat)', ...recs.ollama },
   ];
   // Which choice is currently selected per kind, so we can highlight it:
@@ -727,14 +818,20 @@ function renderRecommendations(recs) {
         ${it.realtime_factor ? `<span class="rec-chip">${escapeHtml(it.realtime_factor)}</span>` : ''}
       </div>
       <div class="rec-note muted">${escapeHtml(it.note || '')}</div>
-      ${it.key === 'yolo' ? '<p class="muted small">Face tracking currently uses yolov8n.pt automatically. Alternate YOLO model selection is not supported yet.</p>' : it.choices ? `<div class="rec-choices">${it.choices.map((choice, i) => {
+      ${it.key === 'yolo' ? '<p class="muted small">Face framing is a visual heuristic, not speaker recognition. The bundled YuNet model runs locally.</p>' : it.choices ? `<div class="rec-choices">${it.choices.map((choice, i) => {
         const selected = it.key === 'whisper' ? (choice.model === whisperSel) : (it.key === 'ollama' && choice.model === selectedOllamaModel);
         return `<button class="btn btn-small rec-choice${selected ? ' is-selected' : ''}" aria-busy="${it.key === 'ollama' && localModelSaving}" ${it.key === 'ollama' && localModelSaving ? 'disabled' : ''} data-model-kind="${it.key}" data-model="${escapeHtml(choice.model)}">
-          ${escapeHtml(choice.tier)}: ${escapeHtml(choice.model)}
+          ${escapeHtml(choice.tier)}: ${escapeHtml(choice.model)} <span data-rec-availability>${it.key==='ollama'?(installedLocalModels?installedLocalModels.some(m=>sameLocalModel(m,choice.model))?'· Downloaded':'· Not downloaded — view download':modelCatalogDetails.some(m=>sameLocalModel(m.name,choice.model))?modelCatalogDetails.find(m=>sameLocalModel(m.name,choice.model)).installed?'· Downloaded':'· Not downloaded — view download':'· Availability not checked'):'· Checking availability…'}</span>
         </button>`;
       }).join('')}</div>` : ''}
     </div>`).join('');
   document.querySelectorAll('.rec-choice').forEach((button) => {
+    if(button.dataset.modelKind==='whisper'){
+      fetch(`${serverUrl}/api/setup/whisper/model-status?model=${encodeURIComponent(button.dataset.model)}`,{signal:AbortSignal.timeout(10000)})
+        .then(async response=>{if(!response.ok)throw Error();return response.json();})
+        .then(data=>{button.querySelector('[data-rec-availability]').textContent=data.backend==='remote'?'· Remote transcription':!data.backend?'· Engine not installed':data.present?'· Downloaded':'· Not downloaded — view download';button.dataset.missing=String(!!data.backend&&data.backend!=='remote'&&!data.present);})
+        .catch(()=>{button.querySelector('[data-rec-availability]').textContent='· Availability not checked';});
+    }
     button.addEventListener('click', async () => {
       if (button.dataset.modelKind === 'whisper') {
         const select = document.getElementById('whisper-model');
@@ -747,7 +844,10 @@ function renderRecommendations(recs) {
         button.parentElement.querySelectorAll('.rec-choice').forEach((b) => b.classList.remove('is-selected'));
         button.classList.add('is-selected');
         showToast(`Whisper model set to ${button.dataset.model}`, 'success');
+        if(button.dataset.missing==='true')window.KlipzyQualityDownloads?.open();
       } else {
+        const known=modelCatalogDetails.find(m=>sameLocalModel(m.name,button.dataset.model));
+        if(installedLocalModels?!installedLocalModels.some(m=>sameLocalModel(m,button.dataset.model)):known&&!known.installed){showLocalModelDownload(button.dataset.model);return;}
         chooseLocalModel(button.dataset.model).catch(error => showToast(error.message,'error'));
       }
     });
@@ -811,7 +911,7 @@ const DEP_DEF = {
   },
   ultralytics: {
     label: 'Ultralytics (YOLO)',
-    desc: 'Face tracking for smart auto-reframing',
+    desc: 'Optional legacy person detector (AGPL/commercial terms). Default framing uses OpenCV; YOLO requires explicit environment opt-in and local weights.',
     check: (d) => !!d.ultralytics && d.ultralytics.installed,
     statusText: (d) => (d.ultralytics && d.ultralytics.installed ? 'Installed' : 'Missing'),
   },

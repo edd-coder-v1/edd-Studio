@@ -25,7 +25,9 @@ soundfile>=0.12.1
 
 # Computer vision (speaker tracking / smart crop)
 opencv-python>=4.8.0
-ultralytics>=8.0.0
+# Shared-audio multicamera alignment (also used transitively by librosa).
+scipy>=1.10.0
+# Legacy YOLO is optional, not installed by default. See requirements-yolo.txt.
 # torch / torchvision: install separately for your platform:
 #   Windows/Linux: pip install torch torchvision (add --index-url https://download.pytorch.org/whl/cu121 for CUDA)
 #   macOS: pip install torch torchvision (Apple Silicon gets MPS acceleration automatically)

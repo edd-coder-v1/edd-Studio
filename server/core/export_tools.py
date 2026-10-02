@@ -7,6 +7,7 @@ Export integrations for NLE editors:
 
 import os
 import json
+from xml.sax.saxutils import escape
 from pathlib import Path
 from typing import List, Dict, Any
 
@@ -21,7 +22,7 @@ def export_fcpxml(
     Exports clip cuts into an Apple FCPXML / Premiere Pro XML format.
     Compatible with Adobe Premiere Pro, DaVinci Resolve, and Final Cut Pro.
     """
-    video_name = Path(video_path).name
+    video_name = escape(Path(video_path).name)
     video_abs = Path(video_path).resolve().as_uri()
 
     xml_lines = [
@@ -29,7 +30,7 @@ def export_fcpxml(
         '<!DOCTYPE xmeml>',
         '<xmeml version="4">',
         '  <sequence>',
-        f'    <name>{Path(video_path).stem}_Shorts_Timeline</name>',
+        f'    <name>{escape(Path(video_path).stem)}_Shorts_Timeline</name>',
         '    <rate>',
         f'      <timebase>{int(fps)}</timebase>',
         '      <ntsc>FALSE</ntsc>',
@@ -53,7 +54,7 @@ def export_fcpxml(
 
         xml_lines.extend([
             f'          <clipitem id="clipitem_{idx}">',
-            f'            <name>{clip.get("title", f"Clip {idx}")}</name>',
+            f'            <name>{escape(str(clip.get("title", f"Clip {idx}")))}</name>',
             f'            <duration>{duration_frames}</duration>',
             '            <rate>',
             f'              <timebase>{int(fps)}</timebase>',

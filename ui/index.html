@@ -36,11 +36,16 @@
       </nav>
       <div class="sidebar-models">
         <label for="sidebar-ai-model">Local AI model</label>
-        <select id="sidebar-ai-model" disabled><option>Loading models…</option></select>
+        <span id="sidebar-model-state" class="model-state" role="status" aria-live="polite" data-state="detecting">Checking Ollama…</span>
+        <select id="sidebar-ai-model" disabled><option value="">Loading models…</option></select>
         <button id="sidebar-refresh-models" class="btn btn-small" type="button">Refresh models</button>
+        <button id="sidebar-stop-ollama" class="btn btn-small" type="button" hidden>Stop Ollama</button>
+        <button id="sidebar-start-ollama" class="btn btn-small" type="button" hidden>Start Ollama</button>
         <label for="sidebar-whisper-model">Transcription quality</label>
         <select id="sidebar-whisper-model"><option value="tiny">Tiny · fastest</option><option value="base">Base · fast</option><option value="small">Small · balanced</option><option value="medium">Medium · detailed</option><option value="large-v3">Large v3 · highest capacity</option></select>
-        <small id="sidebar-model-status" role="status">Choose the model for upcoming AI requests and transcription for new jobs.</small>
+        <small id="sidebar-model-status" role="status" aria-live="polite">Checking models already installed on this computer. No downloads.</small>
+        <small id="quality-model-status" role="status" aria-live="polite"></small>
+        <button id="quality-model-link" class="btn btn-small" type="button">View transcription model</button>
       </div>
       <div class="sidebar-footer">
         <div class="sidebar-quick-actions">
@@ -64,6 +69,46 @@
 
     <!-- Main content -->
     <main class="main">
+      <section id="view-multicam" class="view">
+        <header class="view-header"><h1>Multicamera</h1><p>Synchronize two or three recordings of the same event, review camera suggestions, and export with continuous main audio.</p></header>
+        <div class="card">
+          <button id="mc-pick" class="btn btn-primary">Choose camera recordings</button>
+          <button id="mc-load" class="btn btn-secondary">Open saved sequence</button>
+          <input id="mc-plan-file" type="file" accept=".json" hidden />
+          <div id="mc-cameras"></div>
+          <div class="form-row">
+            <label>Start (seconds)<input id="mc-start" type="number" min="0" value="0" /></label>
+            <label>Length (seconds)<input id="mc-duration" type="number" min="2" max="28800" value="120" /></label>
+            <label>Minimum shot (seconds)<input id="mc-min" type="number" min="2" max="60" value="5" /></label>
+            <label>Target shot (seconds)<input id="mc-target" type="number" min="3" max="120" value="12" /></label>
+            <label>Suggestions<select id="mc-mode"><option value="pacing">Follow pacing</option><option value="speakers">Follow speakers (experimental)</option></select></label>
+            <label>Expected voices<input id="mc-speaker-count" type="number" min="1" max="6" value="3" /></label>
+            <label>Wide fallback<select id="mc-wide"><option value="0">Camera 1</option><option value="1">Camera 2</option><option value="2">Camera 3</option></select></label>
+          </div>
+          <p class="muted">Camera 1 supplies the sync reference and main audio. Speaker mode groups similar voices locally, then you assign each group to its best camera. Start with 60–120 seconds. It can confuse similar voices, music, or overlapping speech; review the samples and turns.</p>
+          <button id="mc-analyze" class="btn btn-primary">Sync and suggest shots</button>
+          <button id="mc-cancel" class="btn btn-danger" disabled>Cancel job</button>
+          <p id="mc-status" role="status" aria-live="polite">Choose recordings to begin.</p>
+        </div>
+        <div class="card">
+          <h2>Review the sequence</h2>
+          <p>Check each camera's sync offset, adjust shot boundaries or camera choices, and preview the selected shot. Positive offsets advance that camera relative to Camera 1.</p>
+          <video id="mc-preview" controls style="width:100%;max-height:360px;background:#000"></video>
+          <div id="mc-speaker-panel" hidden>
+            <h2>Review voices and assign cameras</h2>
+            <p id="mc-speaker-summary" class="muted"></p>
+            <div id="mc-speaker-mapping"></div>
+            <details><summary>Review and correct speaker turns</summary><div id="mc-turns" style="max-height:280px;overflow:auto"></div></details>
+            <button id="mc-apply-speakers" class="btn btn-primary">Apply speaker choices</button>
+          </div>
+          <div style="overflow:auto;max-height:450px"><table class="mc-table"><thead><tr><th>Start</th><th>End</th><th>Camera</th><th>Suggestion</th><th>Review</th></tr></thead><tbody id="mc-shots"></tbody></table></div>
+          <button id="mc-save" class="btn btn-secondary">Save sequence file</button>
+          <button id="mc-folder" class="btn btn-secondary">Choose export folder</button><span id="mc-output-folder"></span>
+          <label>Export size<select id="mc-height"><option value="1080">1080p</option><option value="720">720p preview</option></select></label>
+          <label><input id="mc-reviewed" type="checkbox" /> I have reviewed camera synchronization and shot choices.</label>
+          <button id="mc-export" class="btn btn-primary">Export sequence</button>
+        </div>
+      </section>
       <!-- Projects Home View — landing screen (OpenClipper/CapCut-style):
            create a new project or reopen a saved one. -->
       <section id="view-projects" class="view active">
@@ -1325,7 +1370,7 @@ This is a practical product policy, not a legal opinion or a guarantee of enforc
         <!-- GPU acceleration card (hardware-aware, guided) -->
         <div class="card">
           <div class="card-head-row">
-            <h3>GPU Acceleration</h3>
+            <h3>Hardware Acceleration</h3>
             <span class="muted small">PyTorch — powers Whisper &amp; face-tracking</span>
           </div>
           <div id="gpu-accel" class="gpu-accel">
@@ -1395,7 +1440,7 @@ This is a practical product policy, not a legal opinion or a guarantee of enforc
         <!-- Change AI models card -->
         <div class="card">
           <div class="card-head-row">
-            <h3>AI Models</h3>
+            <h3>Local AI Model Catalog</h3>
             <span class="muted small">Pick what runs on your machine</span>
           </div>
           <p class="muted">Choose the transcription and local-LLM models. The recommended picks above are matched to your hardware; you're free to change them.</p>
@@ -1418,6 +1463,17 @@ This is a practical product policy, not a legal opinion or a guarantee of enforc
             </label>
           </div>
           <p class="muted small" id="ai-models-note">Whisper size applies to the next clipping run. The LLM model is used by AI Edit Chat, LLM highlight discovery, and the optional AI hook rewrite.</p>
+          <section id="quality-model-download" tabindex="-1" aria-labelledby="quality-model-title">
+            <h3 id="quality-model-title">Transcription model download</h3>
+            <p id="quality-model-detail" role="status" aria-live="polite">Select a transcription quality to check its model.</p>
+            <p class="muted small">Downloading is optional. Viewing this panel or changing quality does not start a download. Larger models use more disk space and memory.</p>
+            <button id="quality-model-refresh" class="btn btn-small" type="button">Check availability</button>
+            <button id="quality-model-folder" class="btn btn-small" type="button">Open model folder</button>
+            <button id="quality-model-download-btn" class="btn btn-primary" type="button" disabled>Download selected model</button>
+            <button id="quality-model-cancel" class="btn btn-small" type="button" disabled>Cancel download</button>
+            <progress id="quality-model-progress" max="100" value="0" hidden></progress>
+            <p id="quality-download-status" role="status" aria-live="polite"></p>
+          </section>
 
           <!-- AI backend: built-in Ollama, or any OpenAI-compatible server -->
           <div class="card-head-row" style="margin-top:18px;">
@@ -1581,6 +1637,8 @@ This is a practical product policy, not a legal opinion or a guarantee of enforc
   <script src="src/process-payload.js"></script>
   <script src="src/caption-preview-math.js"></script>
   <script src="src/editor-spec.js"></script>
+  <script src="src/project-store.js"></script>
+  <script src="src/cut-timing.js"></script>
   <script src="src/renderer.js"></script>
   <script src="src/url-import.js"></script>
   <script src="src/media-tools.js"></script>
@@ -1591,6 +1649,9 @@ This is a practical product policy, not a legal opinion or a guarantee of enforc
   <script src="src/editor.js"></script>
   <script src="src/install-activity.js"></script>
   <script src="src/setup-panel.js"></script>
+  <script src="src/quality-model-download.js"></script>
   <script src="src/studio-layout.js"></script>
+  <script src="src/standard-tools.js"></script>
+  <script src="src/multicam.js"></script>
 </body>
 </html>
