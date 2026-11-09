@@ -100,7 +100,7 @@ async function startServer() {
       if (await isPortFree(port)) { SERVER_PORT = port; available = true; break; }
     }
     if (!available) {
-      reportServerStatus('failed', 'No free local engine port was found (8765–8785). Close unused Klipzy instances and reopen.');
+      reportServerStatus('failed', 'No free local engine port was found (8765–8785). Close unused Edd Studio instances and reopen.');
       return;
     }
     reportServerStatus('starting', `An older or different engine occupies port 8765. Starting the project environment on port ${SERVER_PORT}.`);
@@ -159,7 +159,7 @@ async function startServer() {
           if (!app.isQuitting) {
             reportServerStatus(
               'crashed',
-              `The backend stopped unexpectedly (code ${code ?? 'null'}${signal ? ', signal ' + signal : ''}). Restart Klipzy Studio.`
+              `The backend stopped unexpectedly (code ${code ?? 'null'}${signal ? ', signal ' + signal : ''}). Restart Edd Studio.`
             );
           }
         });
@@ -179,7 +179,7 @@ async function startServer() {
   serverProcess = null;
   reportServerStatus(
     'failed',
-    'Could not start the Python backend in the selected environment. Reopen Klipzy; if this repeats, '
+    'Could not start the Python backend in the selected environment. Reopen Edd Studio; if this repeats, '
       + 'check logs/server.log and repair dependencies in the project .venv using the launcher. '
       + 'A slow startup does not mean PyTorch or a GPU is missing. Details: ' + attempted.join(' | ')
   );
@@ -213,7 +213,7 @@ function createWindow() {
     height: 900,
     minWidth: 1100,
     minHeight: 700,
-    title: 'Klipzy Studio',
+    title: 'Edd Studio',
     webPreferences: {
       // The renderer only talks to the preload bridge (window.clipperAPI); it
       // never needs direct Node access, so keep the process isolated.
@@ -263,7 +263,7 @@ ipcMain.handle('select-video', async () => {
 });
 
 ipcMain.handle('restart-app', async () => {
-  if (reusedExistingServer) return {error:'This engine was started outside this window. Close Klipzy and restart that backend before reopening.'};
+  if (reusedExistingServer) return {error:'This engine was started outside this window. Close Edd Studio and restart that backend before reopening.'};
   try {
     const headers = {'X-Klipzy-Token': await getEffectiveApiToken()};
     const response = await fetch(`http://127.0.0.1:${SERVER_PORT}/api/setup/install-jobs`, {headers, signal:AbortSignal.timeout(5000)});
@@ -286,7 +286,7 @@ ipcMain.handle('restart-app', async () => {
         serverProcess.once('exit', () => {clearTimeout(timer); resolve(true);});
         serverProcess.kill();
       });
-      if (!stopped) {app.isQuitting = false; return {error:'The backend did not stop. Close and reopen Klipzy manually.'};}
+      if (!stopped) {app.isQuitting = false; return {error:'The backend did not stop. Close and reopen Edd Studio manually.'};}
     }
     quitApproved = true;
     app.relaunch();
@@ -297,7 +297,7 @@ ipcMain.handle('restart-app', async () => {
 
 ipcMain.handle('server-status', () => serverStatus);
 ipcMain.handle('stop-ollama', async()=>{
-  const choice=await dialog.showMessageBox(mainWindow,{type:'question',title:'Stop Ollama?',message:'Stop the local Ollama service?',detail:'This interrupts AI requests in Klipzy and other apps using Ollama. Installed models stay on disk.',buttons:['Cancel','Stop Ollama'],defaultId:0,cancelId:0});
+  const choice=await dialog.showMessageBox(mainWindow,{type:'question',title:'Stop Ollama?',message:'Stop the local Ollama service?',detail:'This interrupts AI requests in Edd Studio and other apps using Ollama. Installed models stay on disk.',buttons:['Cancel','Stop Ollama'],defaultId:0,cancelId:0});
   if(choice.response!==1)return {cancelled:true};
   try{await stopOllama();return {ok:true};}catch(error){return {ok:false,error:error.message};}
 });

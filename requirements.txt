@@ -1,4 +1,4 @@
-# Klipzy Studio - Python server dependencies
+# Edd Studio - Python server dependencies
 
 # Core
 pydantic>=2.0.0

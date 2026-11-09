@@ -10,7 +10,7 @@ import re
 import shutil
 import subprocess  # kept for subprocess.PIPE / CompletedProcess kwargs
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple  # Any used by crop rects
 
 # All ffmpeg/ffprobe calls go through proc.run (a killable subprocess.run
 # work-alike) so a job cancel can hard-stop the active render instead of waiting
@@ -302,6 +302,80 @@ def probe_video_dims(file_path: str) -> Optional[Tuple[int, int, float]]:
         return None
 
 
+# Output canvases for dual-file facecam+gameplay layouts (Shorts-oriented).
+DUAL_LAYOUT_CANVAS: Dict[str, Tuple[int, int]] = {
+    "9:16": (1080, 1920),
+    "4:5": (1080, 1350),
+    "1:1": (1080, 1080),
+    "16:9": (1920, 1080),
+}
+
+STACKED_LAYOUTS = frozenset({"stacked_cam_bottom", "stacked_cam_top"})
+PIP_VERTICAL_LAYOUTS = frozenset({"pip", "pip_9_16"})
+
+
+def _even_dim(n: int) -> int:
+    return max(2, int(n) // 2 * 2)
+
+
+def _pip_corner(cam_position: str, base_w: int, base_h: int, box_w: int, box_h: int, pad: int) -> Tuple[int, int]:
+    pos = (cam_position or "bottom-right").strip().lower().replace("_", "-")
+    cx = max(pad, (base_w - box_w) // 2)
+    cy = max(pad, (base_h - box_h) // 2)
+    if pos == "bottom-left":
+        return pad, base_h - box_h - pad
+    if pos == "top-right":
+        return base_w - box_w - pad, pad
+    if pos == "top-left":
+        return pad, pad
+    if pos in ("top-center", "top-middle", "middle-top"):
+        return cx, pad
+    if pos in ("bottom-center", "bottom-middle", "middle-bottom"):
+        return cx, base_h - box_h - pad
+    if pos in ("center", "middle"):
+        return cx, cy
+    if pos in ("left", "middle-left", "center-left"):
+        return pad, cy
+    if pos in ("right", "middle-right", "center-right"):
+        return base_w - box_w - pad, cy
+    # default: bottom-right
+    return base_w - box_w - pad, base_h - box_h - pad
+
+
+def _clamp_norm_crop(crop: Optional[Dict[str, Any]]) -> Optional[Dict[str, float]]:
+    """Normalize a UI crop rect {x,y,w,h} in 0–1 fractions, or None if unusable."""
+    if not isinstance(crop, dict):
+        return None
+    try:
+        x = float(crop.get("x", 0))
+        y = float(crop.get("y", 0))
+        w = float(crop.get("w", 1))
+        h = float(crop.get("h", 1))
+    except (TypeError, ValueError):
+        return None
+    w = max(0.05, min(1.0, w))
+    h = max(0.05, min(1.0, h))
+    x = max(0.0, min(1.0 - w, x))
+    y = max(0.0, min(1.0 - h, y))
+    return {"x": x, "y": y, "w": w, "h": h}
+
+
+def _source_crop_scale(in_label: str, out_label: str, ow: int, oh: int,
+                       crop: Optional[Dict[str, Any]] = None) -> str:
+    """Crop a normalized source rect (optional) then scale/fill to ow×oh."""
+    rect = _clamp_norm_crop(crop)
+    if rect:
+        return (
+            f"{in_label}crop=trunc(iw*{rect['w']:.6f}/2)*2:trunc(ih*{rect['h']:.6f}/2)*2:"
+            f"trunc(iw*{rect['x']:.6f}/2)*2:trunc(ih*{rect['y']:.6f}/2)*2,"
+            f"scale={ow}:{oh},setsar=1{out_label}"
+        )
+    return (
+        f"{in_label}scale={ow}:{oh}:force_original_aspect_ratio=increase,"
+        f"crop={ow}:{oh},setsar=1{out_label}"
+    )
+
+
 def build_filter_chain(
     aspect_ratio: Optional[str] = None,
     crop_x_offset: Optional[float] = None,
@@ -311,6 +385,9 @@ def build_filter_chain(
     cam_scale: float = 0.3,
     cam_position: str = "bottom-right",
     crop_x_expr: Optional[str] = None,
+    cam_split: float = 0.3,
+    game_crop: Optional[Dict[str, Any]] = None,
+    cam_crop: Optional[Dict[str, Any]] = None,
 ) -> List[str]:
     """
     Build the ffmpeg filtergraph part (without subtitle burn) for a clip render.
@@ -319,8 +396,58 @@ def build_filter_chain(
     "inputs...label" chain. When an aspect ratio / PiP layout is requested the
     chain emits a `[v]` label that later steps consume. Returns [] for a plain
     full-frame passthrough (no visual processing needed).
+
+    Dual-file layouts (require has_cam):
+      stacked_cam_bottom / stacked_cam_top — gameplay + facecam vstack on 9:16 canvas
+      pip / pip_9_16 — vertical gameplay fill + facecam corner overlay
+      game_reaction — legacy full-frame 16:9 PiP (unchanged)
     """
     filters: List[str] = []
+    layout = (layout or "").strip()
+
+    if has_cam and layout in STACKED_LAYOUTS:
+        canvas_key = aspect_ratio if aspect_ratio in DUAL_LAYOUT_CANVAS else "9:16"
+        ow, oh = DUAL_LAYOUT_CANVAS[canvas_key]
+        split = max(0.15, min(float(cam_split or 0.3), 0.5))
+        cam_h = _even_dim(oh * split)
+        main_h = oh - cam_h
+        game = _source_crop_scale("[0:v]", "[vmain]", ow, main_h, game_crop)
+        cam = _source_crop_scale("[1:v]", "[vcam]", ow, cam_h, cam_crop)
+        order = "[vcam][vmain]" if layout == "stacked_cam_top" else "[vmain][vcam]"
+        filters.append(f"{game};{cam};{order}vstack=inputs=2[v]")
+        return filters
+
+    if has_cam and layout in PIP_VERTICAL_LAYOUTS:
+        canvas_key = aspect_ratio if aspect_ratio in DUAL_LAYOUT_CANVAS else "9:16"
+        ow, oh = DUAL_LAYOUT_CANVAS[canvas_key]
+        pad = 6
+        cam_w = _even_dim(ow * max(0.15, min(float(cam_scale or 0.3), 0.5)))
+        cam_h = _even_dim(cam_w * 9 / 16)
+        max_cam_h = _even_dim(oh * 0.4)
+        if cam_h > max_cam_h:
+            cam_h = max_cam_h
+            cam_w = _even_dim(cam_h * 16 / 9)
+        box_w, box_h = cam_w + pad * 2, cam_h + pad * 2
+        x, y = _pip_corner(cam_position, ow, oh, box_w, box_h, pad)
+        game = _source_crop_scale("[0:v]", "[vbase]", ow, oh, game_crop)
+        # Facecam PiP: optional source crop, then fit into the PiP box.
+        cam_rect = _clamp_norm_crop(cam_crop)
+        if cam_rect:
+            cam = (
+                f"[1:v]crop=trunc(iw*{cam_rect['w']:.6f}/2)*2:trunc(ih*{cam_rect['h']:.6f}/2)*2:"
+                f"trunc(iw*{cam_rect['x']:.6f}/2)*2:trunc(ih*{cam_rect['y']:.6f}/2)*2,"
+                f"scale={cam_w}:{cam_h}:force_original_aspect_ratio=decrease,"
+                f"pad={cam_w}:{cam_h}:(ow-iw)/2:(oh-ih)/2:color=0x000000,"
+                f"pad={box_w}:{box_h}:{pad}:{pad}:color=0xFFFFFF,setsar=1[cf]"
+            )
+        else:
+            cam = (
+                f"[1:v]scale={cam_w}:{cam_h}:force_original_aspect_ratio=decrease,"
+                f"pad={cam_w}:{cam_h}:(ow-iw)/2:(oh-ih)/2:color=0x000000,"
+                f"pad={box_w}:{box_h}:{pad}:{pad}:color=0xFFFFFF,setsar=1[cf]"
+            )
+        filters.append(f"{game};{cam};[vbase][cf]overlay={x}:{y}:eof_action=repeat[v]")
+        return filters
 
     if layout == "game_reaction":
         if has_cam:
@@ -329,14 +456,7 @@ def build_filter_chain(
             cam_w = int(base_w * max(0.1, min(cam_scale, 0.5)))
             cam_h = int(cam_w * 9 / 16)
             box_w, box_h = cam_w + pad * 2, cam_h + pad * 2
-            if cam_position == "bottom-left":
-                x, y = pad, base_h - box_h - pad
-            elif cam_position == "top-right":
-                x, y = base_w - box_w - pad, pad
-            elif cam_position == "top-left":
-                x, y = pad, pad
-            else:
-                x, y = base_w - box_w - pad, base_h - box_h - pad
+            x, y = _pip_corner(cam_position, base_w, base_h, box_w, box_h, pad)
 
             # Camera PiP: scale + letterbox in a 16:9 box, white border, overlay
             # in the chosen corner over the full-frame gameplay.
@@ -463,6 +583,10 @@ def render_clip(
     cam_scale: float = 0.3,
     cam_position: str = "bottom-right",
     crop_x_expr: Optional[str] = None,
+    cam_split: float = 0.3,
+    cam_sync_ms: float = 0.0,
+    game_crop: Optional[Dict[str, Any]] = None,
+    cam_crop: Optional[Dict[str, Any]] = None,
     # ---- audio/visual polish (all optional, off by default) ----
     normalize_audio: bool = False,
     music_path: Optional[str] = None,
@@ -475,9 +599,11 @@ def render_clip(
     Render a clip segment with optional vertical crop and hardware-accelerated encoding.
 
     layout:
-      '' | 'vertical'   -> 9:16 crop (legacy behaviour)
+      '' | 'vertical' | 'gameplay_only' -> 9:16 crop (legacy behaviour)
       'full'            -> no crop, full-frame passthrough
-      'game_reaction'   -> full-frame gameplay + webcam reaction in a corner overlay
+      'stacked_cam_bottom' / 'stacked_cam_top' -> dual-file vertical stack (Shorts)
+      'pip' / 'pip_9_16' -> dual-file vertical fill + facecam corner overlay
+      'game_reaction'   -> legacy full-frame 16:9 gameplay + webcam PiP
     """
     # Resolve before changing cwd below for the subtitles filter. A relative
     # output path would otherwise be resolved relative to the subtitle folder.
@@ -487,6 +613,11 @@ def render_clip(
         cam_video = str(Path(cam_video).expanduser().resolve())
     Path(output_video).parent.mkdir(parents=True, exist_ok=True)
     duration = end_time - start_time
+    layout = (layout or "").strip()
+    if layout in ("gameplay_only", "vertical"):
+        # Treat as standard crop path (no dual-file composition).
+        if layout == "gameplay_only":
+            layout = ""
 
     def _run_ffmpeg(command, **kwargs):
         """proc.run, but delete the half-written output file if the render is
@@ -504,12 +635,18 @@ def render_clip(
                 pass
             raise
 
-    has_cam = bool(cam_video and os.path.exists(cam_video))
+    dual_layouts = STACKED_LAYOUTS | PIP_VERTICAL_LAYOUTS | {"game_reaction"}
+    wants_cam = layout in dual_layouts
+    has_cam = bool(wants_cam and cam_video and os.path.exists(cam_video))
     music_ok = bool(music_path and os.path.exists(str(Path(music_path).expanduser())))
     if music_ok:
         music_path = str(Path(music_path).expanduser().resolve())
+    # Dual-file Shorts layouts force a vertical canvas when aspect was left open.
+    render_aspect = aspect_ratio
+    if has_cam and layout in (STACKED_LAYOUTS | PIP_VERTICAL_LAYOUTS) and not render_aspect:
+        render_aspect = "9:16"
     filters = build_filter_chain(
-        aspect_ratio=aspect_ratio,
+        aspect_ratio=render_aspect,
         crop_x_offset=crop_x_offset,
         layout=layout,
         has_cam=has_cam,
@@ -517,6 +654,9 @@ def render_clip(
         cam_scale=cam_scale,
         cam_position=cam_position,
         crop_x_expr=crop_x_expr,
+        cam_split=cam_split,
+        game_crop=game_crop,
+        cam_crop=cam_crop,
     )
 
     # Auto-zoom (gentle push-in). Needs concrete dimensions/fps for zoompan, so
@@ -594,7 +734,9 @@ def render_clip(
         "-i", input_video,
     ]
     if has_cam:
-        cmd += ["-i", cam_video]
+        # Seek facecam to the same window, shifted by optional sync offset (ms).
+        cam_start = max(0.0, float(start_time) + (float(cam_sync_ms or 0.0) / 1000.0))
+        cmd += ["-ss", str(cam_start), "-i", cam_video]
     if music_ok:
         # Loop the music so a short track still covers the whole clip; the output
         # -t below bounds it (amix duration=first tracks the speech length).

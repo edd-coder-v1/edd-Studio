@@ -51,14 +51,60 @@
     var musicPathEl = doc.getElementById('music-path');
     var musicVolEl = doc.getElementById('music-volume');
 
+    // Anything over 5 minutes must keep the original frame size.
+    var LONG_CLIP_ORIGINAL_SECONDS = 300;
+    var minDuration = parseFloat(doc.getElementById('min-duration').value) || 20;
+    var maxDuration = parseFloat(doc.getElementById('max-duration').value) || 60;
+    var longClipOriginal = maxDuration >= LONG_CLIP_ORIGINAL_SECONDS || minDuration >= LONG_CLIP_ORIGINAL_SECONDS;
+    var aspectRatio = aspectEl ? aspectEl.value : '9:16';
+    var verticalCrop = doc.getElementById('vertical-crop').checked;
+    var layoutValue = (doc.getElementById('process-layout') && doc.getElementById('process-layout').value) || 'gameplay_only';
+    if (longClipOriginal) {
+      aspectRatio = 'full';
+      verticalCrop = false;
+      layoutValue = 'gameplay_only';
+    }
+
     return {
       video_path: selectedVideo,
       audio_track_gains: (doc.getElementById("export-audio-gains")?.value || "").trim() ? doc.getElementById("export-audio-gains").value.split(",").map(Number) : [],
       visual_review: !!doc.getElementById("visual-review")?.checked,
       analysis_audio_tracks: (doc.getElementById("analysis-audio-tracks")?.value || "same").replace(/\s/g, "").toLowerCase(),
       audio_tracks: (doc.getElementById("source-audio-tracks")?.value || "default").replace(/\s/g, "").toLowerCase(),
-      vertical_crop: doc.getElementById('vertical-crop').checked,
-      aspect_ratio: aspectEl ? aspectEl.value : '9:16',
+      vertical_crop: verticalCrop,
+      aspect_ratio: aspectRatio,
+      layout: layoutValue,
+      cam_video: (function () {
+        var layoutEl = doc.getElementById('process-layout');
+        var layout = longClipOriginal ? 'gameplay_only' : ((layoutEl && layoutEl.value) || 'gameplay_only');
+        if (layout === 'gameplay_only') return null;
+        // Optional separate facecam file; otherwise reuse the uploaded gameplay video
+        // (same-source boxes: gameplay crop + facecam crop from one recording).
+        var ext = doc.getElementById('process-cam-path-external');
+        var hidden = doc.getElementById('process-cam-path');
+        var path = ((ext && ext.value) || (hidden && hidden.value) || '').trim();
+        return path || selectedVideo || null;
+      })(),
+      cam_scale: parseFloat((doc.getElementById('process-cam-scale') && doc.getElementById('process-cam-scale').value) || '0.3') || 0.3,
+      cam_position: (doc.getElementById('process-cam-position') && doc.getElementById('process-cam-position').value) || 'bottom-right',
+      cam_split: (function () {
+        var el = doc.getElementById('process-cam-split');
+        var v = parseFloat(el && el.value);
+        if (!isFinite(v)) return 0.3;
+        // Range UI uses percent (15–50); API expects a fraction.
+        return v > 1 ? Math.min(0.5, Math.max(0.15, v / 100)) : Math.min(0.5, Math.max(0.15, v));
+      })(),
+      cam_sync_ms: parseFloat((doc.getElementById('process-cam-sync') && doc.getElementById('process-cam-sync').value) || '0') || 0,
+      game_crop: (function () {
+        var el = doc.getElementById('process-game-crop');
+        if (!el || !el.value) return null;
+        try { return JSON.parse(el.value); } catch (e) { return null; }
+      })(),
+      cam_crop: (function () {
+        var el = doc.getElementById('process-cam-crop');
+        if (!el || !el.value) return null;
+        try { return JSON.parse(el.value); } catch (e) { return null; }
+      })(),
       caption_style: captionOpts.caption_style,
       font_size: captionOpts.font_size,
       font_name: captionOpts.font_name,
@@ -79,9 +125,15 @@
       auto_clip_count: !!doc.getElementById('auto-clip-count')?.checked,
       include_unreviewed_action: !!doc.getElementById('include-unreviewed-action')?.checked,
       max_clips: parseInt(doc.getElementById('max-clips').value, 10) || 5,
-      min_duration: parseFloat(doc.getElementById('min-duration').value) || 20,
-      max_duration: parseFloat(doc.getElementById('max-duration').value) || 60,
+      min_duration: minDuration,
+      max_duration: maxDuration,
       whisper_model: doc.getElementById('whisper-model').value,
+      language: (function () {
+        var el = doc.getElementById('whisper-language');
+        if (!el) return null;
+        var v = (el.value || '').trim();
+        return v || null;
+      })(),
       use_audio_energy: doc.getElementById('audio-energy').checked,
       use_llm: doc.getElementById('use-llm').checked,
       speaker_aware_selection: doc.getElementById('speaker-aware-selection')

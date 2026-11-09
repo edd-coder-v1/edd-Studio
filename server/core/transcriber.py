@@ -252,17 +252,30 @@ class Transcriber:
                 id=s.get("id", 0), start=s.get("start", 0.0),
                 end=s.get("end", 0.0), text=s.get("text", ""), words=words,
             ))
-        return segments
+        return sanitize_word_timestamps(segments)
 
     def _transcribe_mlx(self, audio_path: str, language: Optional[str] = None):
         """MLX-Whisper transcription on Apple Silicon."""
         import mlx_whisper
 
-        options = {"word_timestamps": True}
+        # Temperature 0 + no carry-over context reduces drift/hallucinations on
+        # long game streams; word_timestamps stay on for karaoke captions.
+        options = {
+            "word_timestamps": True,
+            "temperature": 0.0,
+            "condition_on_previous_text": False,
+        }
         if language:
             options["language"] = language
 
-        result = mlx_whisper.transcribe(audio_path, path_or_hf_repo=self._model, **options)
+        try:
+            result = mlx_whisper.transcribe(audio_path, path_or_hf_repo=self._model, **options)
+        except TypeError:
+            # Older mlx-whisper builds may not accept decoding knobs — keep word timestamps.
+            fallback = {"word_timestamps": True}
+            if language:
+                fallback["language"] = language
+            result = mlx_whisper.transcribe(audio_path, path_or_hf_repo=self._model, **fallback)
 
         segments: List[TranscriptSegment] = []
         for s in result.get("segments", []):
@@ -284,7 +297,7 @@ class Transcriber:
                     words=words,
                 )
             )
-        return segments
+        return sanitize_word_timestamps(segments)
 
     def _transcribe_faster(self, audio_path: str, language: Optional[str] = None):
         # vad_filter uses an ONNX Silero VAD via onnxruntime. On some Windows
@@ -295,12 +308,21 @@ class Transcriber:
         # cases where it raises instead of aborting, and the class-level flag
         # avoids paying the crash cost twice in one run.
         def _run(use_vad: bool):
-            return self._model.transcribe(
-                audio_path,
+            kwargs = dict(
                 language=language,
                 word_timestamps=True,
                 vad_filter=use_vad,
+                beam_size=5,
+                best_of=5,
+                temperature=0.0,
+                condition_on_previous_text=False,
             )
+            if use_vad:
+                kwargs["vad_parameters"] = {
+                    "min_silence_duration_ms": 400,
+                    "speech_pad_ms": 200,
+                }
+            return self._model.transcribe(audio_path, **kwargs)
 
         if getattr(Transcriber, "_vad_disabled", False):
             segments, _info = _run(False)
@@ -333,10 +355,16 @@ class Transcriber:
                     words=words,
                 )
             )
-        return out
+        return sanitize_word_timestamps(out)
 
     def _transcribe_openai(self, audio_path: str, language: Optional[str]):
-        options = {"word_timestamps": True}
+        options = {
+            "word_timestamps": True,
+            "temperature": 0.0,
+            "condition_on_previous_text": False,
+            "beam_size": 5,
+            "best_of": 5,
+        }
         if language:
             options["language"] = language
 
@@ -349,7 +377,13 @@ class Transcriber:
                 message="Failed to launch Triton kernels.*",
                 category=UserWarning,
             )
-            result = self._model.transcribe(audio_path, **options)
+            try:
+                result = self._model.transcribe(audio_path, **options)
+            except TypeError:
+                fallback = {"word_timestamps": True, "temperature": 0.0}
+                if language:
+                    fallback["language"] = language
+                result = self._model.transcribe(audio_path, **fallback)
 
         segments: List[TranscriptSegment] = []
         for s in result.get("segments", []):
@@ -371,7 +405,49 @@ class Transcriber:
                     words=words,
                 )
             )
-        return segments
+        return sanitize_word_timestamps(segments)
+
+
+def sanitize_word_timestamps(segments: List[TranscriptSegment]) -> List[TranscriptSegment]:
+    """Clamp overlapping / inverted word timings so karaoke stays readable."""
+    cleaned: List[TranscriptSegment] = []
+    for seg in segments:
+        words = []
+        prev_end = float(seg.start or 0.0)
+        for w in (seg.words or []):
+            text = (w.word or "").strip()
+            if not text:
+                continue
+            start = float(w.start or 0.0)
+            end = float(w.end or start)
+            if start < prev_end:
+                start = prev_end
+            if end <= start:
+                end = start + 0.05
+            # Drop near-zero confidence tokens that usually desync karaoke.
+            if w.probability is not None and float(w.probability) < 0.15:
+                prev_end = end
+                continue
+            words.append(WordTimestamp(
+                word=text,
+                start=round(start, 3),
+                end=round(end, 3),
+                probability=round(float(w.probability if w.probability is not None else 1.0), 3),
+            ))
+            prev_end = end
+        if words:
+            cleaned.append(seg.model_copy(update={
+                "id": len(cleaned),
+                "start": words[0].start,
+                "end": max(float(seg.end or 0.0), words[-1].end),
+                "words": words,
+                "text": " ".join(x.word for x in words).strip() or seg.text,
+            }))
+        else:
+            cleaned.append(seg.model_copy(update={"id": len(cleaned)}))
+    return cleaned
+
+
 def split_transcript_gaps(segments, max_gap=3.0):
     """Repair ASR segments that bridge long silence using real word timestamps.
 

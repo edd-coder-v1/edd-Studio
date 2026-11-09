@@ -249,10 +249,14 @@ class HighlightDetector:
 def detect_highlights_auto(segments):
     """Discover complete speech moments at sentence/pause boundaries, independent of manual limits.
 
-    Eight seconds avoids isolated fragments; two minutes bounds a single short.
-    These are window bounds, not an output-count target. Scoring remains heuristic.
+    Eight seconds avoids isolated fragments; ``max_window`` (default 10 minutes)
+    bounds a single auto highlight. These are window bounds, not an output-count
+    target. Scoring remains heuristic.
     """
     detector = HighlightDetector()
+    # Allow extended story clips (5–10 min) while still capping runaway windows.
+    max_window = 600.0
+    min_window = 8.0
     candidates = []
     for i, first in enumerate(segments):
         if i and not (segments[i-1].text.rstrip().endswith((".", "!", "?")) or first.start - segments[i-1].end >= 0.6):
@@ -264,12 +268,12 @@ def detect_highlights_auto(segments):
             if j > i and seg.start - segments[j-1].end > 5.0:
                 break
             duration = seg.end - first.start
-            if duration > 120:
+            if duration > max_window:
                 break
             text.append(seg.text)
             words.extend(seg.words or [])
             boundary = seg.text.rstrip().endswith((".", "!", "?")) or j == len(segments)-1 or segments[j+1].start - seg.end >= 0.6
-            if duration < 8 or not boundary:
+            if duration < min_window or not boundary:
                 continue
             full = " ".join(text)
             score = detector._compute_virality_score(full)

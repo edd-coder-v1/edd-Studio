@@ -83,5 +83,5 @@ Be concise, practical, and creative. You only know about the current clip contex
             "• Hook & title ideas\n"
             "• Caption & hashtag suggestions\n"
             "• Clip timing & pacing advice\n\n"
-            "💡 Ollama is Klipzy's local AI engine. Enable it in Shorts Clipper or install/start Ollama from Setup if it is not available yet."
+            "💡 Ollama is Edd Studio's local AI engine. Enable it in Shorts Clipper or install/start Ollama from Setup if it is not available yet."
         )

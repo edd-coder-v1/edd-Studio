@@ -10,7 +10,7 @@ function renderInstallActivity() {
     return `<article class="install-job" data-job="${escapeHtml(job.id)}" aria-label="${escapeHtml(job.component)} installation">
       <strong>${escapeHtml(job.component)}</strong> <span role="status">${escapeHtml(label)}</span>
       ${busy ? '<progress aria-label="Installation in progress"></progress>' : ''}
-      ${job.restart_required ? '<button class="btn btn-primary btn-small" data-restart-app>Restart Klipzy</button>' : ''}
+      ${job.restart_required ? '<button class="btn btn-primary btn-small" data-restart-app>Restart Edd Studio</button>' : ''}
       <details ${busy || job.state === 'failed' || expanded.has(job.id) ? 'open' : ''}><summary>Installer output</summary><pre>${escapeHtml(job.output || 'Checking environment…')}</pre></details>
     </article>`;
   }).join('') : '<p class="muted">Downloads, verification results, and installer output will appear here.</p>';
@@ -57,8 +57,8 @@ async function runDependencyInstall(component) {
   }
 }
 async function restartAfterInstall() {
-  if (!window.clipperAPI?.restartApp) { showAlert('Close and reopen Klipzy to load the updated dependencies.'); return; }
-  if (!await showConfirm('Restart Klipzy to load updated dependencies? Finish or cancel any processing jobs first.', 'Restart Klipzy')) return;
+  if (!window.clipperAPI?.restartApp) { showAlert('Close and reopen Edd Studio to load the updated dependencies.'); return; }
+  if (!await showConfirm('Restart Edd Studio to load updated dependencies? Finish or cancel any processing jobs first.', 'Restart Edd Studio')) return;
   try {
     const response = await window.clipperAPI.restartApp();
     if (response?.error) throw new Error(response.error);

@@ -23,7 +23,7 @@ import sys
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(description="Klipzy transcription worker")
+    parser = argparse.ArgumentParser(description="Edd Studio transcription worker")
     parser.add_argument("audio")
     parser.add_argument("--model", default="base")
     parser.add_argument("--language", default=None)

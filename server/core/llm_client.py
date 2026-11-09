@@ -1,7 +1,7 @@
 """
 Single seam for every local/remote LLM call in the app.
 
-Klipzy ships with Ollama as the built-in default, but Ollama, llama.cpp's
+Edd Studio ships with Ollama as the built-in default, but Ollama, llama.cpp's
 ``llama-server`` and LM Studio all expose the SAME OpenAI-compatible
 ``/v1/chat/completions`` contract — so supporting "anything else" is one
 configurable endpoint, not a second edition of the app.

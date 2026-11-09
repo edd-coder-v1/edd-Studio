@@ -1,5 +1,5 @@
 """
-FastAPI server exposing Klipzy Studio as a local API.
+FastAPI server exposing Edd Studio as a local API.
 The Electron UI talks to this server over HTTP on localhost.
 """
 
@@ -54,7 +54,7 @@ async def _lifespan(app):
     yield
 
 
-app = FastAPI(title="Klipzy Studio Server", version="1.0.0", lifespan=_lifespan)
+app = FastAPI(title="Edd Studio Server", version="1.0.0", lifespan=_lifespan)
 
 # Shared secret for this run. Electron passes one in via KLIPZY_API_TOKEN;
 # otherwise one is generated and written to logs/api_token.txt for scripts.
@@ -98,6 +98,8 @@ from server.api import imports as _imports_api  # noqa: E402
 app.include_router(_imports_api.router)
 from server.api import media as _media_api
 app.include_router(_media_api.router)
+from server.api import watch as _watch_api  # noqa: E402
+app.include_router(_watch_api.router)
 
 
 
@@ -388,6 +390,14 @@ def _run_job(job_id: str) -> None:
             visual_review=req.visual_review,
             vertical_crop=req.vertical_crop,
             aspect_ratio=req.aspect_ratio,
+            layout=getattr(req, "layout", None) or "gameplay_only",
+            cam_video=getattr(req, "cam_video", None),
+            cam_scale=getattr(req, "cam_scale", 0.3) or 0.3,
+            cam_position=getattr(req, "cam_position", None) or "bottom-right",
+            cam_split=getattr(req, "cam_split", 0.3) or 0.3,
+            cam_sync_ms=getattr(req, "cam_sync_ms", 0.0) or 0.0,
+            game_crop=getattr(req, "game_crop", None),
+            cam_crop=getattr(req, "cam_crop", None),
             max_clips=req.max_clips,
             auto_clip_count=req.auto_clip_count,
             include_unreviewed_action=req.include_unreviewed_action,
@@ -1033,7 +1043,10 @@ def regenerate_subtitles(req: SubtitleRegenRequest):
                         aspect_ratio=req.aspect_ratio or "full", burn_captions=True,
                         subtitle_path=ass_path, layout=req.layout or "",
                         cam_video=req.cam_video, cam_scale=req.cam_scale,
-                        cam_position=req.cam_position, crop_x_offset=req.crop_x_offset)
+                        cam_position=req.cam_position,
+                        cam_split=getattr(req, "cam_split", 0.3) or 0.3,
+                        cam_sync_ms=getattr(req, "cam_sync_ms", 0.0) or 0.0,
+                        crop_x_offset=req.crop_x_offset)
             if not os.path.isfile(revision) or os.path.getsize(revision) == 0:
                 raise RuntimeError("Renderer produced no video")
             rendered_path = revision
@@ -1434,6 +1447,8 @@ def _reburn_clip_with_subs(req: SubtitleRegenRequest, ass_path: str,
                 cam_video=req.cam_video,
                 cam_scale=req.cam_scale,
                 cam_position=req.cam_position,
+                cam_split=getattr(req, "cam_split", 0.3) or 0.3,
+                cam_sync_ms=getattr(req, "cam_sync_ms", 0.0) or 0.0,
             )
         else:
             render_clip(
@@ -1448,6 +1463,8 @@ def _reburn_clip_with_subs(req: SubtitleRegenRequest, ass_path: str,
                 cam_video=req.cam_video,
                 cam_scale=req.cam_scale,
                 cam_position=req.cam_position,
+                cam_split=getattr(req, "cam_split", 0.3) or 0.3,
+                cam_sync_ms=getattr(req, "cam_sync_ms", 0.0) or 0.0,
                 crop_x_offset=req.crop_x_offset,
             )
         if os.path.isfile(temp_target) and os.path.getsize(temp_target) > 0:
@@ -1971,9 +1988,12 @@ def create_manual_trim(req: TrimRequest):
 def render_custom_selection(req: CustomRenderRequest):
     """
     Re-renders a selected source range with a chosen output layout:
-      layout = 'vertical'       -> 9:16 smart crop
-              'full'            -> original full-frame
-              'game_reaction'   -> full-frame gameplay + camera PiP overlay
+      layout = 'vertical'             -> 9:16 smart crop
+              'full'                  -> original full-frame
+              'stacked_cam_bottom'    -> dual-file vertical stack (cam bottom)
+              'stacked_cam_top'       -> dual-file vertical stack (cam top)
+              'pip' / 'pip_9_16'      -> dual-file vertical fill + facecam PiP
+              'game_reaction'         -> legacy full-frame 16:9 + camera PiP
     """
     if not os.path.exists(req.video_path):
         raise HTTPException(status_code=400, detail=f"Video file not found: {req.video_path}")
@@ -1982,10 +2002,18 @@ def render_custom_selection(req: CustomRenderRequest):
     if req.end_seconds - req.start_seconds > 600:
         raise HTTPException(status_code=400, detail="Trim range too long (max 10 minutes per clip)")
 
-    if req.layout not in ("vertical", "full", "game_reaction"):
+    allowed_layouts = (
+        "vertical", "full", "game_reaction",
+        "stacked_cam_bottom", "stacked_cam_top", "pip", "pip_9_16",
+        "gameplay_only", "",
+    )
+    if req.layout not in allowed_layouts:
         raise HTTPException(status_code=400, detail=f"Unsupported layout: {req.layout}")
     if req.aspect_ratio not in ("9:16", "1:1", "4:5", "16:9", "full", None):
         raise HTTPException(status_code=400, detail=f"Unsupported aspect ratio: {req.aspect_ratio}")
+    dual_layouts = {"stacked_cam_bottom", "stacked_cam_top", "pip", "pip_9_16", "game_reaction"}
+    if req.layout in dual_layouts and req.cam_video and not os.path.exists(req.cam_video):
+        raise HTTPException(status_code=400, detail=f"Facecam file not found: {req.cam_video}")
 
     out_path = req.output_path or str(
         _ensure_output_root() / f"manual_{uuid.uuid4().hex[:8]}" / "clip.mp4"
@@ -2007,6 +2035,10 @@ def render_custom_selection(req: CustomRenderRequest):
         cam_video=req.cam_video,
         cam_scale=req.cam_scale,
         cam_position=req.cam_position,
+        cam_split=getattr(req, "cam_split", 0.3) or 0.3,
+        cam_sync_ms=getattr(req, "cam_sync_ms", 0.0) or 0.0,
+        game_crop=getattr(req, "game_crop", None),
+        cam_crop=getattr(req, "cam_crop", None),
     )
 
     if not os.path.isfile(out_path):

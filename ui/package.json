@@ -1,7 +1,7 @@
 {
   "name": "edd-studio",
   "version": "1.1.4",
-  "description": "edd-Studio - local-first Long Form to Shorts studio",
+  "description": "Edd Studio - local-first Long Form to Shorts studio",
   "main": "electron/main.js",
   "scripts": {
     "start": "electron .",
@@ -22,7 +22,7 @@
   },
   "build": {
     "appId": "com.techfreq.klipzy-studio",
-    "productName": "edd-Studio",
+    "productName": "Edd Studio",
     "files": [
       "electron/**/*",
       "src/**/*",
@@ -56,7 +56,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": "always",
       "createStartMenuShortcut": true,
-      "shortcutName": "Klipzy Studio"
+      "shortcutName": "Edd Studio"
     },
     "mac": {
       "target": "dmg",

@@ -1,5 +1,5 @@
 """
-System & dependency check for the Klipzy Studio desktop app.
+System & dependency check for the Edd Studio desktop app.
 
 Detects what's installed, recommends hardware-appropriate models,
 and provides click-to-install commands (winget / Homebrew / pip).
@@ -601,7 +601,7 @@ def gpu_acceleration_status() -> Dict:
         detail = f"{name or vendor_label} is powering transcription and face-tracking."
     elif state == "dormant" and torch_info.get("cuda_build"):
         headline = "CUDA-enabled PyTorch is installed, but the GPU is unavailable to this process."
-        detail = "Restart Klipzy to load the installed build. If this persists, check the NVIDIA driver; reinstalling the same CUDA wheel is not an activation step."
+        detail = "Restart Edd Studio to load the installed build. If this persists, check the NVIDIA driver; reinstalling the same CUDA wheel is not an activation step."
     elif state == "dormant":
         exp = " (experimental)" if plan["experimental"] else ""
         headline = f"{name or vendor_label} found, but PyTorch is running on the CPU."

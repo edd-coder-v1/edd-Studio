@@ -121,7 +121,7 @@ def _worker(job):
         if not _check(component):
             raise RuntimeError("Installer finished, but verification failed. Review the output; acceleration may also require a working GPU driver.")
         _update(job, state="complete", ok=True, restart_required=True)
-        _log(job, "Verified. Restart Klipzy to load the updated dependencies.\n")
+        _log(job, "Verified. Restart Edd Studio to load the updated dependencies.\n")
     except Exception as error:
         _log(job, str(error) + "\n")
         _update(job, state="failed", error=str(error))

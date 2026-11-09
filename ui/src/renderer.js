@@ -1,4 +1,4 @@
-// Renderer - UI logic for Klipzy Studio (client)
+// Renderer - UI logic for Edd Studio (client)
 // Talks to the local Python FastAPI server
 
 let serverUrl = 'http://127.0.0.1:8765';
@@ -29,7 +29,7 @@ window.fetch = async function klipzyFetch(resource, options) {
     apiToken = await window.clipperAPI.getApiToken();
     response = await send();
   }
-  if (response.status === 401) throw new Error('The app could not reconnect securely to its local engine. Close all Klipzy Studio windows and any separately started Klipzy backend, then reopen the app. CPU and GPU modes both work; no GPU installation is needed to fix this connection error.');
+  if (response.status === 401) throw new Error('The app could not reconnect securely to its local engine. Close all Edd Studio windows and any separately started Edd Studio backend, then reopen the app. CPU and GPU modes both work; no GPU installation is needed to fix this connection error.');
   return response;
 };
 let selectedVideo = null;
@@ -426,6 +426,9 @@ const OUTPUT_MODE_PRESETS = {
   longform: { hint: 'Landscape 16:9, longer highlights up to 90s — YouTube.',
               set: { 'clip-aspect-ratio': '16:9', 'min-duration': 30, 'max-duration': 90 },
               check: { 'vertical-crop': false, 'remove-silence': false } },
+  extended: { hint: '5–10 min clips keep original size (no crop). ≥5 minutes always uses original frame size.',
+              set: { 'clip-aspect-ratio': 'full', 'min-duration': 300, 'max-duration': 600, 'process-layout': 'gameplay_only' },
+              check: { 'vertical-crop': false, 'remove-silence': false } },
   tight:    { hint: 'Vertical 9:16 up to 60s with dead-air removed — punchy edits.',
               set: { 'clip-aspect-ratio': '9:16', 'min-duration': 20, 'max-duration': 60 },
               check: { 'vertical-crop': true, 'remove-silence': true } },
@@ -438,6 +441,7 @@ function applyOutputPreset() {
   const preset = OUTPUT_MODE_PRESETS[sel.value];
   if (!preset) {
     if (hintEl) hintEl.textContent = 'Or fine-tune everything manually below.';
+    enforceLongClipOriginalSize();
     return;
   }
   Object.entries(preset.set || {}).forEach(([id, val]) => {
@@ -449,11 +453,47 @@ function applyOutputPreset() {
     if (node && node.type === 'checkbox') node.checked = !!val;
   });
   if (hintEl) hintEl.textContent = preset.hint;
+  enforceLongClipOriginalSize();
   updateSourceAspect();
   refreshPortraitCaptionPreview();
 }
 
+/** Clips longer than 5 minutes keep the source frame size (no reframing). */
+const LONG_CLIP_ORIGINAL_SECONDS = 300;
+
+function enforceLongClipOriginalSize() {
+  const maxEl = document.getElementById('max-duration');
+  const minEl = document.getElementById('min-duration');
+  const maxDur = parseFloat(maxEl?.value) || 0;
+  const minDur = parseFloat(minEl?.value) || 0;
+  const long = maxDur >= LONG_CLIP_ORIGINAL_SECONDS || minDur >= LONG_CLIP_ORIGINAL_SECONDS;
+  const aspect = document.getElementById('clip-aspect-ratio');
+  const crop = document.getElementById('vertical-crop');
+  const layout = document.getElementById('process-layout');
+  const sourceAspect = document.getElementById('source-aspect');
+  const hintEl = document.getElementById('output-mode-hint');
+  if (long) {
+    if (aspect) aspect.value = 'full';
+    if (crop) crop.checked = false;
+    if (layout) layout.value = 'gameplay_only';
+    if (sourceAspect) sourceAspect.value = 'full';
+    if (aspect) aspect.disabled = true;
+    if (crop) crop.disabled = true;
+    if (hintEl && !OUTPUT_MODE_PRESETS[document.getElementById('output-mode-preset')?.value]?.hint) {
+      hintEl.textContent = 'Over 5 minutes: original size only (no crop / dual layout).';
+    }
+  } else {
+    if (aspect) aspect.disabled = false;
+    if (crop) crop.disabled = false;
+  }
+  try { updateSourceAspect(); } catch (_) {}
+}
+
 document.getElementById('output-mode-preset')?.addEventListener('change', applyOutputPreset);
+document.getElementById('max-duration')?.addEventListener('change', enforceLongClipOriginalSize);
+document.getElementById('min-duration')?.addEventListener('change', enforceLongClipOriginalSize);
+document.getElementById('max-duration')?.addEventListener('input', enforceLongClipOriginalSize);
+document.getElementById('min-duration')?.addEventListener('input', enforceLongClipOriginalSize);
 
 // ------------------------------------------------------------------
 // Activity log: append a timestamped event to the process feed. Lifecycle
@@ -751,11 +791,12 @@ function bindEvents() {
   document.getElementById('add-trim-btn')?.addEventListener('click', addTrimmedClip);
   document.getElementById('trim-preview-btn')?.addEventListener('click', previewTrimSelection);
   document.getElementById('trim-layout')?.addEventListener('change', (e) => {
-    const isReaction = e.target.value === 'game_reaction';
-    document.getElementById('cam-options')?.classList.toggle('hidden', !isReaction);
-    if (isReaction) updateCamPositionUI();
+    const dualLayouts = new Set(['game_reaction', 'stacked_cam_bottom', 'stacked_cam_top', 'pip', 'pip_9_16']);
+    const isDual = dualLayouts.has(e.target.value);
+    document.getElementById('cam-options')?.classList.toggle('hidden', !isDual);
+    if (isDual) updateCamPositionUI();
     // Suggested action moments are a gaming-focused affordance.
-    document.getElementById('suggested-moments')?.classList.toggle('hidden', !isReaction);
+    document.getElementById('suggested-moments')?.classList.toggle('hidden', !isDual);
     // Reaction PiP is full-frame, so no smart-crop offset needed.
     applyTrimPreviewRatio(e.target.value);
     const tv = document.getElementById('trim-video');
@@ -763,6 +804,105 @@ function bindEvents() {
   });
   document.getElementById('cam-position')?.addEventListener('change', updateCamPositionUI);
   document.getElementById('pick-cam-btn')?.addEventListener('click', pickCameraClip);
+  // Process-panel: same-source gameplay+facecam boxes on the uploaded video
+  const refreshLayoutCropStudio = () => {
+    if (!window.EddLayoutCrop) return;
+    const layout = document.getElementById('process-layout')?.value || 'gameplay_only';
+    if (layout === 'gameplay_only' || !selectedVideo) {
+      document.getElementById('layout-crop-studio')?.classList.add('hidden');
+      return;
+    }
+    EddLayoutCrop.refresh({
+      sourcePath: selectedVideo,
+      fileUrl: typeof fileUrl === 'function' ? fileUrl : (p) => p,
+    });
+    EddLayoutCrop.drawResultPreview?.();
+  };
+  const syncProcessFacecamUI = () => {
+    const layoutEl = document.getElementById('process-layout');
+    let layout = layoutEl?.value || 'gameplay_only';
+    const needsLayout = layout !== 'gameplay_only';
+    const isStacked = layout === 'stacked_cam_bottom' || layout === 'stacked_cam_top';
+    const isPip = layout === 'pip' || layout === 'pip_9_16';
+    document.getElementById('process-facecam-options')?.classList.toggle('hidden', !needsLayout);
+    document.getElementById('process-stacked-split-row')?.classList.toggle('hidden', !isStacked);
+    document.getElementById('process-stacked-side-row')?.classList.toggle('hidden', !isStacked);
+    document.getElementById('process-pip-scale-row')?.classList.toggle('hidden', !isPip);
+    document.getElementById('process-pip-position-row')?.classList.toggle('hidden', !isPip);
+    const sideEl = document.getElementById('process-stacked-side');
+    if (sideEl && isStacked) {
+      sideEl.value = layout === 'stacked_cam_top' ? 'top' : 'bottom';
+    }
+    const hint = document.getElementById('process-layout-hint');
+    if (hint) {
+      if (isStacked) {
+        hint.textContent = 'Stacked = full-width facecam band. Use “Facecam band side” for Top/Bottom. PiP position does not apply here.';
+      } else if (isPip) {
+        hint.textContent = 'PiP = floating facecam over gameplay. Choose Top center (or another position) under PiP position.';
+      } else {
+        hint.textContent = '';
+      }
+    }
+    const splitEl = document.getElementById('process-cam-split');
+    const splitLabel = document.getElementById('process-cam-split-label');
+    if (splitEl && splitLabel) splitLabel.textContent = `${splitEl.value}%`;
+    refreshLayoutCropStudio();
+  };
+  window.EddLayoutCrop?.bind();
+  document.getElementById('process-layout')?.addEventListener('change', syncProcessFacecamUI);
+  document.getElementById('process-cam-split')?.addEventListener('input', syncProcessFacecamUI);
+  document.getElementById('process-stacked-side')?.addEventListener('change', (e) => {
+    const layoutEl = document.getElementById('process-layout');
+    if (!layoutEl) return;
+    layoutEl.value = e.target.value === 'top' ? 'stacked_cam_top' : 'stacked_cam_bottom';
+    syncProcessFacecamUI();
+  });
+  document.getElementById('process-cam-position')?.addEventListener('change', () => {
+    // If user picks a PiP position while still on stacked, switch to PiP so the choice applies.
+    const layoutEl = document.getElementById('process-layout');
+    const layout = layoutEl?.value || '';
+    if (layoutEl && (layout === 'stacked_cam_bottom' || layout === 'stacked_cam_top')) {
+      layoutEl.value = 'pip';
+      syncProcessFacecamUI();
+      showToast('Switched to PiP so Top/Bottom center positions apply.', 'info');
+    }
+  });
+  document.getElementById('process-pick-cam-btn')?.addEventListener('click', async () => {
+    let camPath = null;
+    if (window.clipperAPI?.selectCameraClip) {
+      camPath = await window.clipperAPI.selectCameraClip();
+    }
+    if (camPath) {
+      const ext = document.getElementById('process-cam-path-external');
+      const hidden = document.getElementById('process-cam-path');
+      if (ext) ext.value = camPath;
+      if (hidden) hidden.value = camPath;
+      syncProcessFacecamUI();
+    }
+  });
+  document.getElementById('process-clear-cam-btn')?.addEventListener('click', () => {
+    const ext = document.getElementById('process-cam-path-external');
+    const hidden = document.getElementById('process-cam-path');
+    if (ext) ext.value = '';
+    if (hidden) hidden.value = '';
+    syncProcessFacecamUI();
+  });
+  document.querySelectorAll('.process-layout-preset').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const layoutEl = document.getElementById('process-layout');
+      if (layoutEl && btn.dataset.layout) layoutEl.value = btn.dataset.layout;
+      if (btn.dataset.split) {
+        const splitEl = document.getElementById('process-cam-split');
+        if (splitEl) splitEl.value = btn.dataset.split;
+      }
+      if (btn.dataset.position) {
+        const posEl = document.getElementById('process-cam-position');
+        if (posEl) posEl.value = btn.dataset.position;
+      }
+      syncProcessFacecamUI();
+    });
+  });
+  syncProcessFacecamUI();
   document.getElementById('suggest-moments-btn')?.addEventListener('click', loadSuggestedMoments);
   document.getElementById('trim-video')?.addEventListener('loadedmetadata', () => {
     const tv = document.getElementById('trim-video');
@@ -1052,6 +1192,7 @@ function selectVideoFile(file, replace = false) {
   trimState.camVideo = null;
   document.getElementById('cam-path').value = '';
   initializeSourcePreview();
+  document.getElementById('process-layout')?.dispatchEvent(new Event('change'));
   if (typeof inspectSourceTracks === 'function') inspectSourceTracks();
   setWizardStep(1);
 }
@@ -1482,7 +1623,7 @@ function renderProjectsHome() {
       <div class="projects-empty">
         <span class="projects-empty-icon" aria-hidden="true">🎬</span>
         <h3>No projects yet</h3>
-        <p>Start your first one — drop in a long video and Klipzy turns it into shorts.</p>
+        <p>Start your first one — drop in a long video and Edd Studio turns it into shorts.</p>
         <button class="btn btn-primary btn-large" id="projects-empty-new">➕ New Project</button>
       </div>`;
     grid.querySelector('#projects-empty-new')?.addEventListener('click', goToNewProject);
@@ -1655,6 +1796,7 @@ function openProject(id) {
   if (project.outputFolder) saveOutputFolder(project.outputFolder);
   restoreProcessingOptions(project.processingOptions);
   syncAutoHighlightControls();
+  document.getElementById('process-layout')?.dispatchEvent(new Event('change'));
   // Restore the output layout/aspect the project was created with.
   const aspectSel = document.getElementById('clip-aspect-ratio');
   if (aspectSel && project.aspectRatio) aspectSel.value = project.aspectRatio;
@@ -1937,8 +2079,9 @@ function fmtTrimTime(seconds) {
 function applyTrimPreviewRatio() {
   const layout = document.getElementById('trim-layout').value;
   const video = document.getElementById('trim-video');
-  video.classList.toggle('trim-vertical', layout === 'vertical');
-  video.classList.toggle('trim-wide', layout === 'full');
+  const verticalish = new Set(['vertical', 'stacked_cam_bottom', 'stacked_cam_top', 'pip', 'pip_9_16']);
+  video.classList.toggle('trim-vertical', verticalish.has(layout));
+  video.classList.toggle('trim-wide', layout === 'full' || layout === 'game_reaction');
 }
 
 function previewTrimSelection() {
@@ -2063,9 +2206,14 @@ async function addTrimmedClip() {
 
   const layout = document.getElementById('trim-layout').value;
   const camPosition = document.getElementById('cam-position').value;
+  const dualLayouts = new Set(['game_reaction', 'stacked_cam_bottom', 'stacked_cam_top', 'pip', 'pip_9_16']);
   // "None" facecam: don't send a camera clip, so the server renders full-frame
-  // gameplay with no PiP overlay even in the game_reaction layout.
-  const useCam = layout === 'game_reaction' && camPosition !== 'none';
+  // gameplay with no PiP overlay even in dual-file layouts.
+  const useCam = dualLayouts.has(layout) && camPosition !== 'none';
+  if (useCam && !trimState.camVideo) {
+    showAlert('Pick a facecam / reaction camera clip first, or set Camera position to None.');
+    return;
+  }
   const payload = {
     video_path: selectedVideo,
     start_seconds: trimState.start,
@@ -2075,6 +2223,8 @@ async function addTrimmedClip() {
     cam_video: useCam ? trimState.camVideo : null,
     cam_scale: parseFloat(document.getElementById('cam-scale').value || '0.3'),
     cam_position: camPosition === 'none' ? 'bottom-right' : camPosition,
+    cam_split: 0.3,
+    cam_sync_ms: 0,
   };
 
   const btn = document.getElementById('add-trim-btn');
@@ -2214,6 +2364,24 @@ async function startClipping() {
   setProcessingActive(true);  // show the spinner immediately; pollJob keeps it on
 
   const payload = buildProcessPayload();
+  const dualLayouts = new Set(['stacked_cam_bottom', 'stacked_cam_top', 'pip', 'pip_9_16', 'game_reaction']);
+  if (payload && dualLayouts.has(payload.layout) && !selectedVideo) {
+    showAlert('Upload a video first, then place the gameplay and facecam boxes on it.');
+    const b = document.getElementById('start-clipping');
+    if (b) { b.disabled = false; b.textContent = '🚀 Start Clipping & Transcribing'; }
+    setProcessingActive(false);
+    setWizardStep(2);
+    return;
+  }
+  // Ensure same-source dual layout always sends cam_video (= uploaded video when no external cam).
+  if (payload && dualLayouts.has(payload.layout) && !payload.cam_video) {
+    payload.cam_video = selectedVideo;
+  }
+  if (payload && window.EddLayoutCrop) {
+    const crops = EddLayoutCrop.getCrops();
+    payload.game_crop = crops.game_crop;
+    payload.cam_crop = crops.cam_crop;
+  }
 
   // Pre-flight: make sure the selected transcription model is downloaded BEFORE
   // the job starts, as its own visible step. Otherwise the model download used

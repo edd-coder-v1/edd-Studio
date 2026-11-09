@@ -1,7 +1,7 @@
 """
 Optional remote speech-to-text, for subtitle generation.
 
-Klipzy transcribes locally by default (mlx-whisper / faster-whisper /
+Edd Studio transcribes locally by default (mlx-whisper / faster-whisper /
 openai-whisper, picked automatically). This module adds ONE optional
 alternative: any server that speaks the OpenAI audio-transcription API
 
@@ -11,7 +11,7 @@ which covers whisper.cpp's ``whisper-server``, faster-whisper-server, Speaches,
 and OpenAI itself — the same "one contract, many servers" trick the LLM engine
 setting uses (see llm_client.py).
 
-Klipzy's karaoke captions need WORD-level timings, so ``verbose_json`` is
+Edd Studio's karaoke captions need WORD-level timings, so ``verbose_json`` is
 requested with word granularity. Servers that only return segments still work:
 their words are spread evenly across each segment's span, which animates
 sensibly but is an approximation, not real per-word alignment. That distinction

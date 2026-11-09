@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Klipzy Studio - macOS / Linux launcher.
+# Edd Studio - macOS / Linux launcher.
 # Sets up the Python venv + UI deps if needed, then launches the desktop app
 # (which spawns the Python backend itself).
 #
@@ -73,6 +73,6 @@ if [ "$NEED_UI_INSTALL" = "1" ]; then
     ( cd ui && npm install )
 fi
 
-echo "[4/4] Launching Klipzy Studio desktop app..."
+echo "[4/4] Launching Edd Studio desktop app..."
 echo "   The app window will open shortly. Close it to stop."
 ( cd ui && npm start )

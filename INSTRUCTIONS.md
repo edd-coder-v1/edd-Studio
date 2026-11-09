@@ -1,6 +1,6 @@
-# 🎬 Klipzy Studio — Complete Instructions & User Guide
+# 🎬 Edd Studio — Complete Instructions & User Guide
 
-Welcome to **Klipzy Studio**, a 100% local-first, privacy-focused AI video clipping and formatting studio. This guide provides comprehensive instructions for installing, configuring, running, using, and developing Klipzy Studio.
+Welcome to **Edd Studio**, a 100% local-first, privacy-focused AI video clipping and formatting studio. This guide provides comprehensive instructions for installing, configuring, running, using, and developing Edd Studio.
 
 ---
 
@@ -8,7 +8,7 @@ Welcome to **Klipzy Studio**, a 100% local-first, privacy-focused AI video clipp
 
 1. [System Prerequisites](#1-system-prerequisites)
 2. [Installation & Setup](#2-installation--setup)
-3. [Running Klipzy Studio](#3-running-klipzy-studio)
+3. [Running Edd Studio](#3-running-edd-studio)
 4. [Using the Studio (Workflow Guide)](#4-using-the-studio-workflow-guide)
    - [Reframing & Aspect Ratios](#reframing--aspect-ratios)
    - [Gaming & Reaction PiP Mode](#gaming--reaction-pip-mode)
@@ -31,7 +31,7 @@ Welcome to **Klipzy Studio**, a 100% local-first, privacy-focused AI video clipp
 
 ## 1. System Prerequisites
 
-Before running Klipzy Studio, ensure you have the following installed on your machine:
+Before running Edd Studio, ensure you have the following installed on your machine:
 
 | Component | Required Version | Purpose |
 |---|---|---|
@@ -96,7 +96,7 @@ cd ..
 
 ---
 
-## 3. Running Klipzy Studio
+## 3. Running Edd Studio
 
 > **Windows: extract the ZIP first.** Don't run the launcher from inside a ZIP viewer. If Windows
 > blocks it, right-click the ZIP → **Properties** → tick **Unblock** before extracting, or see
@@ -128,7 +128,7 @@ npm start
 ## 4. Using the Studio (Workflow Guide)
 
 ### 1. Ingesting Video
-- Drag and drop any video file (`.mp4`, `.mov`, `.mkv`, `.avi`, `.webm`, `.flv`) into the Klipzy Studio window, or click **"Browse Video"**.
+- Drag and drop any video file (`.mp4`, `.mov`, `.mkv`, `.avi`, `.webm`, `.flv`) into the Edd Studio window, or click **"Browse Video"**.
 - The video will automatically load in the player with duration, resolution, and audio waveform metrics.
 
 ### 2. Reframing & Aspect Ratios
@@ -144,10 +144,10 @@ For game streams, tutorials, or reaction videos:
 - Toggle **Gaming / Reaction Layout** in the pipeline settings.
 - Select your **Webcam Position**: `top-left`, `top-right`, `bottom-left`, or `bottom-right`.
 - Set your **Webcam Scale** (default 32% of frame).
-- Klipzy will automatically split the game canvas and overlay the webcam into a stacked vertical format.
+- Edd Studio will automatically split the game canvas and overlay the webcam into a stacked vertical format.
 
 ### 4. Caption Presets & Styling
-Klipzy Studio comes with **22 built-in animated caption presets** (`.ass` word-by-word karaoke formatting):
+Edd Studio comes with **22 built-in animated caption presets** (`.ass` word-by-word karaoke formatting):
 
 - **High-Engagement & Kinetic:** `viral_yellow`, `neon_green`, `bold_white`, `hormozi_bold`, `beast_mode`, `kinetic_pop`
 - **Podcasts & Conversations:** `podcast_subtle`, `minimal_clean`, `cinematic_gold`, `documentary`
@@ -159,7 +159,7 @@ You can also customize the primary highlight color, font size, stroke outline wi
 ### 5. Silence & Dead-Air Auto-Cutter
 - Enable **"Remove Dead Air"** to activate automated silence truncation.
 - Customize the **Silence Threshold** (e.g., `-32 dB`) and **Minimum Silence Duration** (e.g., `0.5s`).
-- Klipzy analyzes speech boundaries and creates jump-cuts to keep the energy high.
+- Edd Studio analyzes speech boundaries and creates jump-cuts to keep the energy high.
 
 ### 6. Word-Level Profanity Filter & Bleeper
 - Enable **"Censor Profanities"** to automatically sanitize output.
@@ -186,7 +186,7 @@ In the Clip Detail / Export panel, you can generate:
 
 ## 5. Choosing Models & AI Engines
 
-**Short version: you don't have to choose.** Open **Setup**, and Klipzy inspects your CPU, RAM
+**Short version: you don't have to choose.** Open **Setup**, and Edd Studio inspects your CPU, RAM
 and GPU and marks the best fit with a ⭐. Nothing downloads without you clicking.
 
 The rest of this section is for when you want to decide yourself, or your footage needs
@@ -213,7 +213,7 @@ next clipping run).
   other** → go to `small` or `medium`. Tested on real outdoor interview footage, `base` produced
   garbled repeated words ("I'm playing Play, play Play, play"). The bigger model fixes that.
   Since your captions *are* the product, the extra minutes are worth it.
-- On **Apple Silicon**, install `mlx-whisper` for native acceleration — Klipzy picks it
+- On **Apple Silicon**, install `mlx-whisper` for native acceleration — Edd Studio picks it
   automatically when present.
 - On **NVIDIA**, if Setup says **"CPU (GPU idle)"**, your PyTorch is CPU-only. Install the CUDA
   build from Setup → GPU Acceleration to unlock real speed.
@@ -221,7 +221,7 @@ next clipping run).
 ### Which local LLM?
 
 This one is **optional**. It writes hooks, titles and descriptions, powers AI Edit Chat, and can
-pick highlights. With it off, Klipzy uses built-in keyword/audio heuristics and still works.
+pick highlights. With it off, Edd Studio uses built-in keyword/audio heuristics and still works.
 
 Browse **Setup → Local AI model catalog**; the ⭐ is the pick for your machine.
 
@@ -271,10 +271,10 @@ Same idea for speech-to-text. **Setup → Subtitle engine → Custom**:
 | OpenAI | `https://api.openai.com/v1` + API key |
 
 One caveat worth understanding: karaoke captions need to know when **each word** is spoken. Some
-servers return that, others only return whole lines. When word timings are missing, Klipzy
+servers return that, others only return whole lines. When word timings are missing, Edd Studio
 spreads the words evenly across each line — it still animates, but it won't match speech exactly.
 **Test connection** tells you which you're getting. If the server stops responding mid-run,
-Klipzy falls back to local Whisper automatically instead of failing the job.
+Edd Studio falls back to local Whisper automatically instead of failing the job.
 
 > **Local-first stays true.** Both engines default to your own machine. Nothing leaves it unless
 > you deliberately enter a cloud address.
@@ -283,7 +283,7 @@ Klipzy falls back to local Whisper automatically instead of failing the job.
 
 ## 6. Using the REST API & Headless Mode
 
-Klipzy Studio runs as an open REST API powered by FastAPI. You can integrate Klipzy Studio into automated scripts, external tools, or custom pipelines.
+Edd Studio runs as an open REST API powered by FastAPI. You can integrate Edd Studio into automated scripts, external tools, or custom pipelines.
 
 - **Interactive API Documentation (Swagger UI):** `http://127.0.0.1:8765/docs`
 - **Alternative Documentation (ReDoc):** `http://127.0.0.1:8765/redoc`
@@ -304,7 +304,7 @@ Klipzy Studio runs as an open REST API powered by FastAPI. You can integrate Kli
 
 ## 7. Running Tests & Quality Checks
 
-Klipzy Studio includes a comprehensive unit test suite covering highlight detection, subtitle generation, NLE exports, aspect ratio reframing, silence detection, and profanity filtering.
+Edd Studio includes a comprehensive unit test suite covering highlight detection, subtitle generation, NLE exports, aspect ratio reframing, silence detection, and profanity filtering.
 
 ### Run tests:
 ```bash
@@ -330,7 +330,7 @@ node --check ui/electron/main.js
 
 ## 8. Building Desktop Installers
 
-To package Klipzy Studio into a standalone desktop application executable:
+To package Edd Studio into a standalone desktop application executable:
 
 ```bash
 cd ui
@@ -353,7 +353,7 @@ The compiled binaries will be output to the `ui/dist/` directory.
 
 ### Q: Windows 11 blocked `start_klipzy.bat` from running
 **A:** That's Windows protecting you from an unsigned script downloaded from the internet, not a
-fault in Klipzy. Two different guards can fire:
+fault in Edd Studio. Two different guards can fire:
 
 - **"Windows protected your PC" (SmartScreen)** → click **More info** → **Run anyway**.
 - **Smart App Control** (on by default on some new Windows 11 PCs) blocks unsigned scripts with
@@ -373,7 +373,7 @@ or from a OneDrive-synced folder, causes unrelated path failures.
 supply-chain hardening. Electron's install script is the part that **downloads Electron itself**,
 so `npm install` prints "added 310 packages" and succeeds while leaving Electron unusable.
 
-**Fix: double-click `fix_electron.bat`** in the Klipzy folder. It prints diagnostics, tries
+**Fix: double-click `fix_electron.bat`** in the Edd Studio folder. It prints diagnostics, tries
 several repair methods in order, and reports which one worked — no commands to type. Then run
 `start_klipzy.bat` again. (The launcher also attempts this automatically.)
 
@@ -409,7 +409,7 @@ blocked the same way. Use `node install.js`.
 
 ### Q: npm printed deprecation warnings and "10 vulnerabilities". Is that a problem?
 **A:** Those come from transitive dependencies of the build tooling (`electron-builder`), not from
-Klipzy's own code, and they don't affect a local install. Don't run `npm audit fix --force` — it
+Edd Studio's own code, and they don't affect a local install. Don't run `npm audit fix --force` — it
 will happily upgrade `electron-builder` across a major version and break packaging. They're on
 the maintenance list.
 
@@ -438,14 +438,14 @@ overwhelms the smaller models. Move up to `small` or `medium` in Setup and re-ru
 **A:** The first request loads the model into memory; later ones reuse it. Expected behaviour.
 
 ### Q: Why does the AI Edit Chat say Ollama is unavailable?
-**A:** Klipzy falls back to rules-based advice whenever no AI engine is reachable, so nothing
+**A:** Edd Studio falls back to rules-based advice whenever no AI engine is reachable, so nothing
 breaks. To enable the local LLM:
 1. Install Ollama from [ollama.com](https://ollama.com/).
 2. Pull a model — `ollama pull gemma2:2b` (or use Setup → Local AI model catalog).
 3. Reopen Setup; the status should turn green.
 
 Already running something else (LM Studio, `llama-server`, a cloud endpoint)? You don't need
-Ollama at all — point Klipzy at it via **Setup → AI engine**. See [§5](#ai-engine-use-your-own-server).
+Ollama at all — point Edd Studio at it via **Setup → AI engine**. See [§5](#ai-engine-use-your-own-server).
 
 ### Q: Do I have to use Ollama / can I use whisper.cpp?
 **A:** No, and yes. Both AI features are pluggable: **Setup → AI engine** for text generation and
@@ -464,4 +464,4 @@ thumbnails and audio stems land together.
 
 ---
 
-*Enjoy creating viral shorts with Klipzy Studio!*
+*Enjoy creating viral shorts with Edd Studio!*

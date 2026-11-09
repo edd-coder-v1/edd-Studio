@@ -518,7 +518,7 @@ async function loadAiModels(statusData, afterStart=false) {
   try {
     const revision = localModelRevision;
     let res = await fetch(`${serverUrl}/api/setup/ai-models`, {signal: AbortSignal.timeout(10000),cache:'no-store'});
-    if (!res.ok) {const error=await res.json().catch(()=>({}));throw new Error(error.detail||`Klipzy could not check the model list (${res.status}).`);}
+    if (!res.ok) {const error=await res.json().catch(()=>({}));throw new Error(error.detail||`Edd Studio could not check the model list (${res.status}).`);}
     let data = await res.json();
     // Ollama may expose its port before its initial disk inventory is ready.
     for(let retry=0;retry<2&&data.inventory?.source!=='disk'&&data.ollama_status?.running&&!(data.installed_ollama_models||[]).length;retry++){
@@ -561,14 +561,14 @@ async function loadAiModels(statusData, afterStart=false) {
     const sidebar = document.getElementById('sidebar-ai-model');
     if (sidebar) { sidebar.innerHTML = '<option value="">Model list unavailable — refresh</option>'; sidebar.disabled = true; }
     const status = document.getElementById('sidebar-model-status');
-    paintModelState('error',`Could not detect installed models. ${error.name==='TimeoutError'?'The check timed out.':error.message||'Check the Klipzy engine connection.'} Press Refresh models to retry. No downloads were started.`);
+    paintModelState('error',`Could not detect installed models. ${error.name==='TimeoutError'?'The check timed out.':error.message||'Check the Edd Studio engine connection.'} Press Refresh models to retry. No downloads were started.`);
   } finally { localModelLoading = false;if(stale&&!localModelSaving)queueMicrotask(()=>loadAiModels()); }
 }
 document.getElementById('sidebar-refresh-models')?.addEventListener('click', () => loadAiModels());
 (()=>{const refresh=document.getElementById('sidebar-refresh-models'),stop=document.getElementById('sidebar-stop-ollama');if(refresh&&stop){const row=document.createElement('div');row.className='model-service-actions';refresh.before(row);row.append(refresh,stop);}})();
 document.getElementById('sidebar-stop-ollama')?.addEventListener('click',async()=>{
   if(localModelLoading||localModelSaving||localOllamaStarting||localOllamaStopping)return;
-  if(!window.clipperAPI?.stopOllama){paintModelState('error','Stop Ollama from its tray menu, or use the Klipzy desktop app.');return;}
+  if(!window.clipperAPI?.stopOllama){paintModelState('error','Stop Ollama from its tray menu, or use the Edd Studio desktop app.');return;}
   localOllamaStopping=true;paintModelState('stopping','Stopping Ollama leaves your downloaded models on disk.');
   try{const result=await window.clipperAPI.stopOllama();if(!result.cancelled&&!result.ok)throw new Error(result.error||'Could not stop Ollama');localOllamaStopping=false;await loadAiModels();}catch(error){paintModelState('error',error.message);}finally{localOllamaStopping=false;}
 });
@@ -672,14 +672,14 @@ async function loadGpuAcceleration() {
   let actions = '';
   let guide = '';
   if (needsRestart) {
-    actions = '<button class="btn btn-primary btn-small" id="gpu-restart-btn">Restart Klipzy to activate</button>';
+    actions = '<button class="btn btn-primary btn-small" id="gpu-restart-btn">Restart Edd Studio to activate</button>';
     guide = '<p>Installation verified in a fresh Python process. Restart to replace the libraries loaded by this session.</p>';
   } else if (g.state === 'active') {
     actions = `<button class="btn btn-small" disabled>✓ Acceleration active (${escapeHtml(g.engine || 'GPU')})</button>
                <button class="btn btn-small btn-ghost" id="gpu-revert-btn" title="Remove PyTorch from this environment">Uninstall PyTorch…</button>`;
   } else if (g.state === 'dormant' && g.cuda_build) {
     actions = '<span class="muted">CUDA build installed · GPU initialization needs attention</span>';
-    guide = '<p>CUDA-enabled PyTorch is installed, but this process cannot use the GPU. Restart Klipzy and check the NVIDIA driver if this persists. Downloading the same build again will not enable a driver that is unavailable.</p>';
+    guide = '<p>CUDA-enabled PyTorch is installed, but this process cannot use the GPU. Restart Edd Studio and check the NVIDIA driver if this persists. Downloading the same build again will not enable a driver that is unavailable.</p>';
   } else if (g.state === 'dormant' || g.state === 'not_installed') {
     const verb = g.state === 'not_installed' ? 'Install PyTorch' : `Enable ${g.plan_label || 'GPU acceleration'}`;
     actions = `<button class="btn btn-primary btn-small" id="gpu-enable-btn">⚡ ${escapeHtml(verb)}</button>`;
@@ -720,7 +720,7 @@ async function loadGpuAcceleration() {
       ${g.state === 'active' ? cmdBlock('Revert to CPU build', g.cpu_command) : ''}
     </div>
     ${transBlock}
-    <p class="muted small">These commands are generated for this computer and target Klipzy’s Python environment. On Windows, paste into PowerShell. Restart after changing PyTorch.</p>`;
+    <p class="muted small">These commands are generated for this computer and target Edd Studio’s Python environment. On Windows, paste into PowerShell. Restart after changing PyTorch.</p>`;
 
   el.querySelectorAll('.gpu-copy').forEach((b) => b.addEventListener('click', async () => {
     try { await navigator.clipboard.writeText(b.dataset.cmd); showToast('Command copied', 'success'); }
@@ -748,7 +748,7 @@ async function loadGpuAcceleration() {
   const enableBtn = document.getElementById('gpu-enable-btn');
   if (enableBtn) enableBtn.addEventListener('click', async () => {
     const ok = await showConfirm(
-      'Check and install the recommended PyTorch build? Klipzy will verify the environment first and skip downloading if that build is already installed. A new installation can be several GB and requires a restart.',
+      'Check and install the recommended PyTorch build? Edd Studio will verify the environment first and skip downloading if that build is already installed. A new installation can be several GB and requires a restart.',
       'Enable GPU acceleration');
     if (!ok) return;
     const orig = enableBtn.textContent;
@@ -887,7 +887,7 @@ const DEP_DEF = {
   },
   ollama: {
     label: 'Ollama (Required)',
-    desc: 'Install Ollama once; Klipzy connects to its local service automatically when AI analysis or chat is enabled.',
+    desc: 'Install Ollama once; Edd Studio connects to its local service automatically when AI analysis or chat is enabled.',
     check: (d) => d.ollama && d.ollama.installed,
     statusText: (d) => {
       if (!d.ollama || !d.ollama.installed) return 'Missing - required';
@@ -949,10 +949,10 @@ function renderDeps(data) {
               ? `<button class="btn btn-small btn-primary" data-install="${escapeHtml(key)}">⬇️ Install</button>`
               : '<span class="muted small">Manual install needed</span>')}
         </div>
-        ${data.uninstall_shell_commands?.[key] ? `<details><summary>Uninstall command · Klipzy Python environment</summary><code>${escapeHtml(data.uninstall_shell_commands[key])}</code><button class="btn btn-small" data-copy-uninstall="${escapeHtml(key)}">Copy command</button><p class="muted small">Removes this package from the displayed Python environment. Restart Klipzy afterward.</p></details>` : ''}
+        ${data.uninstall_shell_commands?.[key] ? `<details><summary>Uninstall command · Edd Studio Python environment</summary><code>${escapeHtml(data.uninstall_shell_commands[key])}</code><button class="btn btn-small" data-copy-uninstall="${escapeHtml(key)}">Copy command</button><p class="muted small">Removes this package from the displayed Python environment. Restart Edd Studio afterward.</p></details>` : ''}
       </div>`;
   }).join('');
-  document.getElementById('setup-deps').innerHTML = (data.uninstall_environment_isolated === false ? '<p class="muted small">Klipzy is using shared system Python. Package removal is disabled here to protect other programs. Relaunch using the project virtual environment for app-scoped removal.</p>' : '') + rows;
+  document.getElementById('setup-deps').innerHTML = (data.uninstall_environment_isolated === false ? '<p class="muted small">Edd Studio is using shared system Python. Package removal is disabled here to protect other programs. Relaunch using the project virtual environment for app-scoped removal.</p>' : '') + rows;
   document.querySelectorAll('[data-copy-uninstall]').forEach(button => button.addEventListener('click', async () => {
     try { await navigator.clipboard.writeText(data.uninstall_shell_commands[button.dataset.copyUninstall]); showToast('Uninstall command copied', 'success'); }
     catch (_) { showToast('Copy failed. Select the displayed command to copy it manually.', 'error'); }

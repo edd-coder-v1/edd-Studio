@@ -1,6 +1,6 @@
-# Contributing to Klipzy Studio
+# Contributing to Edd Studio
 
-Thanks for your interest in improving **Klipzy Studio** — a local-first Long Form → Shorts
+Thanks for your interest in improving **Edd Studio** — a local-first Long Form → Shorts
 studio (Electron UI + FastAPI/Python engine). This guide gets you from clone to a verified
 change quickly.
 
@@ -142,7 +142,7 @@ inputs, and never shell out with unsanitized user strings.
 
 ## License & attribution
 
-Klipzy Studio is under the **TechFreq Developments Open-Attribution License** ([LICENSE.md](LICENSE.md)) —
+Edd Studio is under the **TechFreq Developments Open-Attribution License** ([LICENSE.md](LICENSE.md)) —
 free to use and modify **provided you credit TechFreq Developments** as the original author. By
 contributing, you agree your contributions are licensed under the same terms.
 

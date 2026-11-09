@@ -1,10 +1,10 @@
 @echo off
 setlocal enabledelayedexpansion
-title Klipzy Studio - Electron Repair
+title Edd Studio - Electron Repair
 cd /d "%~dp0"
 
 echo ==============================================
-echo    Klipzy Studio - Electron Repair Tool
+echo    Edd Studio - Electron Repair Tool
 echo ==============================================
 echo.
 echo This fixes the "Electron failed to install correctly" error.

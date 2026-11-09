@@ -1,5 +1,5 @@
 """
-Local API access control for Klipzy Studio.
+Local API access control for Edd Studio.
 
 The server listens on 127.0.0.1, but "listening on localhost" is NOT a security
 boundary for a desktop app: any web page the user happens to open in any browser
@@ -122,7 +122,7 @@ class LocalTokenAuthMiddleware(BaseHTTPMiddleware):
                 status_code=401,
                 content={
                     "detail": (
-                        "Missing or invalid API token. Klipzy Studio's local API "
+                        "Missing or invalid API token. Edd Studio's local API "
                         f"requires the {TOKEN_HEADER} header. The desktop app sends "
                         "this automatically; scripts can read the value from "
                         "logs/api_token.txt."

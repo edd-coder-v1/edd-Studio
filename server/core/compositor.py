@@ -343,8 +343,23 @@ def build_export_command(
                 cw, ch = ow, cam_h
             graph.append(f"[camraw]{crop_filter(facecam['crop'])},scale={cw}:{ch}:force_original_aspect_ratio=increase,crop={cw}:{ch},setsar=1[camout]")
             if facecam["layout"] == "pip":
-                x = "W-w" if "right" in facecam["corner"] else "0"
-                y = "H-h" if "bottom" in facecam["corner"] else "0"
+                corner = (facecam.get("corner") or "bottom-right").replace("_", "-")
+                if "center" in corner and "left" not in corner and "right" not in corner:
+                    x = "(W-w)/2"
+                elif "right" in corner:
+                    x = "W-w"
+                elif "left" in corner:
+                    x = "0"
+                else:
+                    x = "(W-w)/2"
+                if corner in ("center", "middle") or ("center" in corner and "top" not in corner and "bottom" not in corner):
+                    y = "(H-h)/2"
+                elif "bottom" in corner:
+                    y = "H-h"
+                elif "top" in corner:
+                    y = "0"
+                else:
+                    y = "(H-h)/2"
                 graph.append(f"{cur}[camout]overlay={x}:{y}[vcomposed]")
             else:
                 order = "[camout]" + cur if facecam["layout"] == "top" else cur + "[camout]"

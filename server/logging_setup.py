@@ -1,5 +1,5 @@
 """
-Shared logging setup for Klipzy Studio.
+Shared logging setup for Edd Studio.
 
 Two-owner design to avoid duplicate lines:
   * Running standalone (`python main.py` / `python -m server.api.server`):
@@ -75,7 +75,7 @@ def setup_logging(level: int = logging.INFO) -> logging.Logger:
 
     logger.info("=" * 60)
     logger.info(
-        "Klipzy Studio server started at %s (log dir: %s)",
+        "Edd Studio server started at %s (log dir: %s)",
         datetime.now().isoformat(timespec="seconds"),
         _logs_dir(),
     )

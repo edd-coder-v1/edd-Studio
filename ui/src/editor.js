@@ -762,7 +762,11 @@
     if(face) {
       if(face.layout==='pip') {
         var cw=w*face.size; ch=Math.min(h*.45,cw*face.crop.h*vid.videoHeight/(face.crop.w*vid.videoWidth));
-        draw(face.crop,face.corner.includes('right')?w-cw:0,face.corner.includes('bottom')?h-ch:0,cw,ch);
+        var corner=(face.corner||'bottom-right').replace(/_/g,'-');
+        var px = corner.includes('right') ? w-cw : (corner.includes('left') ? 0 : (w-cw)/2);
+        var py = corner.includes('bottom') ? h-ch : (corner.includes('top') ? 0 : (h-ch)/2);
+        if (corner==='center' || corner==='middle') { px=(w-cw)/2; py=(h-ch)/2; }
+        draw(face.crop,px,py,cw,ch);
       } else draw(face.crop,0,face.layout==='top'?0:h-ch,w,ch);
     }
   }

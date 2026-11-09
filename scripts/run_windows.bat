@@ -1,10 +1,10 @@
 @echo off
-REM Klipzy Studio - Windows launcher
+REM Edd Studio - Windows launcher
 REM Sets up the Python venv + UI deps if needed, then launches the desktop app
 REM (which spawns the Python backend itself). Run from anywhere.
 
 setlocal
-title Klipzy Studio Launcher
+title Edd Studio Launcher
 
 REM Repo root is the PARENT of this scripts\ folder - NOT the scripts folder.
 cd /d "%~dp0.."
@@ -82,13 +82,13 @@ if not exist "ui\node_modules\electron\path.txt" (
     exit /b 1
 )
 
-echo [4/4] Launching Klipzy Studio desktop app...
+echo [4/4] Launching Edd Studio desktop app...
 echo    The app window will open shortly. Close it to stop.
 pushd ui
 call npm start
 popd
 
 echo.
-echo Klipzy Studio has exited.
+echo Edd Studio has exited.
 pause
 exit /b 0

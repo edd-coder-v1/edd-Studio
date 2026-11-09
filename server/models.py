@@ -1,5 +1,5 @@
 """
-Core data models for Klipzy Studio (Long Form to Shorts).
+Core data models for Edd Studio (Long Form to Shorts).
 Pydantic models shared across the server API and processing pipeline.
 """
 
@@ -105,6 +105,17 @@ class ProcessRequest(BaseModel):
     video_paths: Optional[List[str]] = None
     vertical_crop: bool = True
     aspect_ratio: Optional[str] = "9:16"  # "9:16" | "1:1" | "4:5" | "16:9" | "full"
+    # Dual-file facecam + gameplay layout for Shorts (applied to every rendered clip).
+    # gameplay_only / "" / vertical -> existing crop behavior; stacked_* / pip need cam_video.
+    layout: str = "gameplay_only"
+    cam_video: Optional[str] = None
+    cam_scale: float = 0.3          # PiP width fraction of canvas
+    cam_position: str = "bottom-right"
+    cam_split: float = 0.3          # stacked: facecam height fraction (0.15–0.5)
+    cam_sync_ms: float = 0.0        # facecam seek offset relative to gameplay (ms)
+    # Normalized source crops {x,y,w,h} in 0–1 fractions (from the visual layout editor).
+    game_crop: Optional[dict] = None
+    cam_crop: Optional[dict] = None
     max_clips: int = 5
     auto_clip_count: bool = False
     include_unreviewed_action: bool = False
@@ -206,10 +217,12 @@ class SubtitleRegenRequest(BaseModel):
     start_seconds: Optional[float] = None
     end_seconds: Optional[float] = None
     aspect_ratio: Optional[str] = "9:16"
-    layout: str = ""  # "vertical" | "full" | "game_reaction"
+    layout: str = ""  # "vertical" | "full" | "game_reaction" | stacked_* | pip
     cam_video: Optional[str] = None
     cam_scale: float = 0.3
     cam_position: str = "bottom-right"
+    cam_split: float = 0.3
+    cam_sync_ms: float = 0.0
     crop_x_offset: Optional[float] = None
     re_render: bool = False
 
@@ -287,7 +300,7 @@ class CustomRenderRequest(BaseModel):
     start_seconds: float
     end_seconds: float
     output_path: Optional[str] = None
-    layout: str = "vertical"       # "vertical" | "full" | "game_reaction"
+    layout: str = "vertical"       # "vertical" | "full" | "game_reaction" | stacked_* | pip
     aspect_ratio: Optional[str] = "9:16"
     crop_x_offset: Optional[float] = None
     burn_captions: bool = False
@@ -307,6 +320,10 @@ class CustomRenderRequest(BaseModel):
     cam_video: Optional[str] = None
     cam_scale: float = 0.3
     cam_position: str = "bottom-right"
+    cam_split: float = 0.3
+    cam_sync_ms: float = 0.0
+    game_crop: Optional[dict] = None
+    cam_crop: Optional[dict] = None
 
 
 class DeleteProjectRequest(BaseModel):

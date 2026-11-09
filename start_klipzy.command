@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Klipzy Studio - macOS one-click launcher.
+# Edd Studio - macOS one-click launcher.
 # Double-click this file in Finder to start the app.
 # It simply runs the maintained macOS launcher in scripts/run_macos.sh.
 
@@ -13,7 +13,7 @@ bash scripts/run_macos.sh
 status=$?
 if [ $status -ne 0 ]; then
     echo ""
-    echo "Klipzy Studio exited with an error (code $status)."
+    echo "Edd Studio exited with an error (code $status)."
     echo "Press Enter to close this window."
     read -r _
 fi

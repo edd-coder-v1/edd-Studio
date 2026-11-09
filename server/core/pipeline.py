@@ -145,6 +145,14 @@ class VideoClipperEngine:
         video_path: str,
         vertical_crop: bool = True,
         aspect_ratio: Optional[str] = "9:16",
+        layout: str = "gameplay_only",
+        cam_video: Optional[str] = None,
+        cam_scale: float = 0.3,
+        cam_position: str = "bottom-right",
+        cam_split: float = 0.3,
+        cam_sync_ms: float = 0.0,
+        game_crop: Optional[dict] = None,
+        cam_crop: Optional[dict] = None,
         max_clips: int = 5,
         auto_clip_count: bool = False,
         include_unreviewed_action: bool = False,
@@ -206,7 +214,23 @@ class VideoClipperEngine:
             raise RuntimeError(ffmpeg_err)
 
         if auto_clip_count:
-            min_duration, max_duration = 8.0, 120.0
+            # Auto can return story-length highlights up to 10 minutes.
+            min_duration, max_duration = 8.0, 600.0
+
+        # Clips longer than 5 minutes keep the original frame size (no reframing).
+        # Job-level lock only for manual limits; Auto may mix short + long clips,
+        # so long ones are forced to original size per-clip at render time.
+        LONG_CLIP_ORIGINAL_SECONDS = 300.0
+        if (
+            not auto_clip_count
+            and (max_duration >= LONG_CLIP_ORIGINAL_SECONDS or min_duration >= LONG_CLIP_ORIGINAL_SECONDS)
+        ):
+            vertical_crop = False
+            aspect_ratio = "full"
+            layout = "gameplay_only"
+            cam_video = None
+            game_crop = None
+            cam_crop = None
 
         self.detector.min_duration = min_duration
         self.detector.max_duration = max_duration
@@ -291,12 +315,14 @@ class VideoClipperEngine:
 
         # VAD can return a segment spanning separated speech islands. Split on
         # observed word gaps, including cached transcripts from older runs.
-        from server.core.transcriber import split_transcript_gaps
+        from server.core.transcriber import split_transcript_gaps, sanitize_word_timestamps
         repaired = split_transcript_gaps(segments)
         if len(repaired) != len(segments):
             report("Repaired transcript segments spanning long speech gaps", 34)
             segments = repaired
             self._save_cache(cache_video_path, cache_model, segments)
+        # Normalize word timings (overlaps / inverted ends) for karaoke burn-in.
+        segments = sanitize_word_timestamps(segments)
 
         trace.event("transcript.summary", segments=len(segments), words=sum(len(s.words or []) for s in segments),
                     first_start=segments[0].start if segments else None, last_end=segments[-1].end if segments else None)
@@ -637,18 +663,47 @@ class VideoClipperEngine:
             report(f"Rendering clip {idx}/{total}...", clip_progress + int(35 / max(1, total)))
             sub_to_burn = clip_ass if (clip_ass and os.path.exists(clip_ass)) else (clip_srt if os.path.exists(clip_srt) else None)
             
+            # Per-clip: anything over 5 minutes must keep original size.
+            clip_is_long = float(getattr(clip, "duration", 0) or 0) >= LONG_CLIP_ORIGINAL_SECONDS
+            clip_aspect = "full" if clip_is_long else aspect_ratio
+            clip_vertical = False if clip_is_long else vertical_crop
+            clip_layout = "gameplay_only" if clip_is_long else (layout or "gameplay_only")
+
+            render_layout = (clip_layout or "gameplay_only").strip()
+            dual_layouts = {
+                "stacked_cam_bottom", "stacked_cam_top", "pip", "pip_9_16", "game_reaction",
+            }
+            use_cam = bool(
+                not clip_is_long
+                and render_layout in dual_layouts
+                and cam_video
+                and os.path.exists(str(cam_video))
+            )
+            # Dual-file Shorts layouts already compose to the canvas; skip speaker crop offsets.
+            render_crop_offset = None if (use_cam or clip_is_long) else crop_offset
+            render_crop_expr = None if (use_cam or clip_is_long) else crop_expr
             render_clip(
                 input_video=video_path,
                 output_video=output_clip_path,
                 start_time=clip.start_time,
                 end_time=clip.end_time,
-                aspect_ratio=aspect_ratio or ("9:16" if vertical_crop else None),
-                crop_x_offset=crop_offset,
-                crop_x_expr=crop_expr,
+                aspect_ratio=clip_aspect or ("9:16" if clip_vertical else None),
+                crop_x_offset=render_crop_offset,
+                crop_x_expr=render_crop_expr,
                 burn_captions=burn_captions,
                 subtitle_path=sub_to_burn,
+                layout=render_layout if use_cam else (
+                    "full" if (clip_aspect == "full" or not clip_vertical) else ""
+                ),
+                cam_video=cam_video if use_cam else None,
+                cam_scale=cam_scale,
+                cam_position=cam_position,
+                cam_split=cam_split,
+                cam_sync_ms=cam_sync_ms,
+                game_crop=game_crop if use_cam else None,
+                cam_crop=cam_crop if use_cam else None,
                 normalize_audio=normalize_audio,
-                auto_zoom=auto_zoom,
+                auto_zoom=auto_zoom if not use_cam else False,
                 music_path=music_path,
                 music_volume=music_volume,
                 duck_music=duck_music,
@@ -695,10 +750,12 @@ class VideoClipperEngine:
                 trace.event("stage.failed", stage=current_stage[0], error_type=type(stage_error).__name__, error=str(stage_error))
                 pass
 
-            # Determine layout string for potential re-render
-            if vertical_crop and aspect_ratio == "9:16":
+            # Layout string for potential re-render / editor reopen.
+            if use_cam:
+                layout_str = render_layout
+            elif clip_vertical and clip_aspect == "9:16":
                 layout_str = "vertical"
-            elif aspect_ratio == "full" or aspect_ratio is None:
+            elif clip_aspect == "full" or clip_aspect is None:
                 layout_str = "full"
             else:
                 layout_str = "vertical"
@@ -718,7 +775,7 @@ class VideoClipperEngine:
                     source_file=video_path,
                     intro_caption=effective_intro or "",
                     captions_burned=bool(burn_captions and sub_to_burn and clip_segs),
-                    aspect_ratio=aspect_ratio,
+                    aspect_ratio=clip_aspect,
                     description=getattr(clip, "description", "") or "",
                     full_text=getattr(clip, "full_text", "") or "",
                     virality=clip.virality,
@@ -728,10 +785,10 @@ class VideoClipperEngine:
                     vtt_path=vtt_path if os.path.exists(vtt_path) else None,
                     ass_path=clip_ass if (clip_ass and os.path.exists(clip_ass)) else None,
                     layout=layout_str,
-                    cam_video=None,
-                    cam_scale=0.3,
-                    cam_position="bottom-right",
-                    crop_x_offset=crop_offset,
+                    cam_video=str(cam_video) if use_cam else None,
+                    cam_scale=cam_scale if use_cam else 0.3,
+                    cam_position=cam_position if use_cam else "bottom-right",
+                    crop_x_offset=render_crop_offset,
                 )
             )
 

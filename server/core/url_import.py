@@ -73,7 +73,7 @@ def open_response(url):
         target = parsed.path or "/"
         if parsed.query:
             target += "?" + parsed.query
-        connection.request("GET", target, headers={"User-Agent": "Klipzy-Studio/1.1", "Accept-Encoding": "identity"})
+        connection.request("GET", target, headers={"User-Agent": "Edd-Studio/1.1", "Accept-Encoding": "identity"})
         return connection, connection.getresponse()
     except BaseException:
         connection.close()

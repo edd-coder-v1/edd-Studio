@@ -1,4 +1,4 @@
-# 🎬 edd-Studio
+# 🎬 Edd Studio
 
 A **local-first Long Form to Shorts studio by TechFreq Developments** for Windows, macOS, and Linux. Turn long videos, podcasts, and streams into ready-to-post vertical Shorts — entirely on your own machine. **No cloud AI, no fees.**
 
@@ -173,7 +173,7 @@ launch installers and touch the filesystem).
 
 ## 🎚️ Which models should I use?
 
-**You don't have to choose.** Open **Setup** and Klipzy checks your CPU / RAM / GPU and marks the
+**You don't have to choose.** Open **Setup** and Edd Studio checks your CPU / RAM / GPU and marks the
 best fit with a ⭐. Nothing downloads unless you click.
 
 If you want to decide yourself, the full guide is in
@@ -194,7 +194,7 @@ One app, one setting. **Ollama is built in and used by default**, so there's not
 configure if you just want it to work. But every AI feature (highlight discovery, hook/title
 copywriting, AI Edit Chat, caption translation) can be pointed at **any OpenAI-compatible
 server** instead — they all speak the same `/v1/chat/completions` contract, so a single
-"server address + model name" is all Klipzy needs:
+"server address + model name" is all Edd Studio needs:
 
 | Server | Typical address |
 |---|---|
@@ -227,7 +227,7 @@ speaks the OpenAI audio-transcription API instead:
 Karaoke captions need **word-level** timings. Servers that return them get exact per-word
 highlighting; servers that only return segments still work, but the highlight is spread evenly
 across each line. **Test connection** tells you which one you're getting before you commit. If
-the server stops responding mid-run, Klipzy falls back to local Whisper automatically rather
+the server stops responding mid-run, Edd Studio falls back to local Whisper automatically rather
 than failing the job.
 
 ---
@@ -305,7 +305,7 @@ self-contained build (via PyInstaller) is planned.
 - [x] **Multilingual subtitles** — translate a clip's captions into any of the
   supported languages locally, with the option to burn the translated karaoke
   captions into a new render
-- [x] **Bring-your-own AI engine** — Ollama is built in, or point Klipzy at any
+- [x] **Bring-your-own AI engine** — Ollama is built in, or point Edd Studio at any
   OpenAI-compatible server (llama.cpp `llama-server`, LM Studio, vLLM, cloud) with
   one address; includes a Test-connection check
 - [x] **Bring-your-own subtitle engine** — transcribe locally, or via any server

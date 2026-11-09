@@ -9,7 +9,7 @@
     connect-src covers both loopback spellings in case the port is remapped.
   -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' http://127.0.0.1:* http://localhost:*; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: file:; media-src 'self' blob: file:; object-src 'none'; base-uri 'none'; form-action 'none';">
-  <title>Klipzy Studio</title>
+  <title>Edd Studio</title>
   <link rel="stylesheet" href="src/styles.css" />
   <link rel="stylesheet" href="src/studio.css" />
 </head>
@@ -19,7 +19,7 @@
     <aside class="sidebar">
       <div class="logo">
         <span class="studio-mark" aria-hidden="true">K</span>
-        <span class="logo-text">Klipzy Studio</span>
+        <span class="logo-text">Edd Studio</span>
       </div>
       <div class="sidebar-projects">
         <label for="sidebar-project-list">📁 Projects</label>
@@ -107,7 +107,7 @@
         <header class="view-header">
           <h1>Long Form to Shorts <span class="header-actions">
             <button class="btn btn-small btn-secondary" id="open-queue-btn" title="View background rendering queue">Queue <span id="queue-badge" class="badge-count hidden">0</span></button>
-            <button class="btn btn-small btn-secondary" id="open-logs-folder" title="Open the logs folder where Klipzy writes server logs">Logs</button>
+            <button class="btn btn-small btn-secondary" id="open-logs-folder" title="Open the logs folder where Edd Studio writes server logs">Logs</button>
           </span></h1>
           <p class="subtitle">Import your footage, choose a style, and review the moments that matter.</p>
           <div id="active-project-label" class="active-project-label hidden">📁 Current project: <strong id="active-project-name"></strong></div>
@@ -147,22 +147,42 @@
             <input type="file" id="file-input" accept="video/*" multiple hidden aria-hidden="true" tabindex="-1" />
           </div>
 
+          <details class="card obs-watch-panel" id="obs-watch-panel">
+            <summary>Watch OBS recording folder (network)</summary>
+            <p class="muted small">Point this at the shared folder where OBS on another PC saves recordings (SMB). When a file stops growing, Edd Studio marks it ready to clip.</p>
+            <div class="obs-watch-controls">
+              <input id="obs-watch-folder" type="text" placeholder="/Volumes/Recordings or mounted SMB path" aria-label="OBS recording folder path" autocomplete="off" />
+              <button type="button" class="btn btn-small btn-secondary" id="obs-watch-browse">Browse…</button>
+              <button type="button" class="btn btn-small btn-primary" id="obs-watch-toggle">Start watching</button>
+            </div>
+            <div class="obs-watch-options">
+              <label class="option">
+                <span>Settle (s)</span>
+                <input type="number" id="obs-watch-settle" value="45" min="10" max="600" title="Seconds a file must stay unchanged before it is ready (use 45–90 on SMB)" />
+              </label>
+              <button type="button" class="btn btn-small btn-secondary" id="obs-watch-scan">Scan now</button>
+              <button type="button" class="btn btn-small btn-secondary" id="obs-watch-save">Save folder</button>
+            </div>
+            <p id="obs-watch-status" class="muted small" role="status" aria-live="polite">Not watching.</p>
+            <div id="obs-watch-list" class="obs-watch-list"></div>
+          </details>
+
           <details class="card url-import-panel">
             <summary>Import a video link</summary>
             <p class="muted small">Paste an authorized direct HTTPS video-file link (up to 10 GiB). Downloads stay on this computer.</p>
             <div class="import-controls"><input id="import-url" type="url" placeholder="https://example.com/my-video.mp4" aria-label="Direct video URL" autocomplete="off" /><button id="import-start" class="btn btn-primary">Import link</button></div>
             <label class="import-consent"><input id="import-rights" type="checkbox" /> I have permission to download and edit this media, and the source service permits this download.</label>
             <details class="import-notice"><summary>Import rules &amp; platform help</summary>
-              <p>Public availability does not grant permission. Respect copyright, privacy and source-service terms. Do not bypass DRM, paywalls or access controls. Klipzy does not grant rights to imported media or guarantee that an export is cleared for publication.</p>
+              <p>Public availability does not grant permission. Respect copyright, privacy and source-service terms. Do not bypass DRM, paywalls or access controls. Edd Studio does not grant rights to imported media or guarantee that an export is cleared for publication.</p>
               <p>YouTube: export your own uploads from <a href="https://support.google.com/youtube/answer/56100?hl=en" target="_blank" rel="noopener">YouTube Studio or Takeout</a>, then upload the file here. YouTube page/playback links are not supported.</p>
               <p>Twitch: use the authorized download in <a href="https://help.twitch.tv/s/article/how-to-use-clips" target="_blank" rel="noopener">Creator Dashboard</a>, then upload the file or paste its authorized direct download link. Account connection is not configured.</p>
-              <details class="import-full-terms"><summary>Full use &amp; import terms</summary><pre># Klipzy Studio - use and content-import terms
+              <details class="import-full-terms"><summary>Full use &amp; import terms</summary><pre># Edd Studio - use and content-import terms
 
-Version 2026-09-18. Klipzy Studio is a local media-editing tool by TechFreq Developments. These terms explain the intended use of the application&#x27;s import and editing features. The software rights and attribution requirements in [LICENSE.md](LICENSE.md) continue to apply.
+Version 2026-09-18. Edd Studio is a local media-editing tool by TechFreq Developments. These terms explain the intended use of the application&#x27;s import and editing features. The software rights and attribution requirements in [LICENSE.md](LICENSE.md) continue to apply.
 
 ## Your media and permissions
 
-You retain your rights in your media. Klipzy does not acquire ownership of imported videos or grant you rights to another person&#x27;s videos, music, performances, likeness or other material. Before downloading, editing, sharing or publishing, obtain the permissions required for the material and your intended use, including applicable privacy and publicity rights.
+You retain your rights in your media. Edd Studio does not acquire ownership of imported videos or grant you rights to another person&#x27;s videos, music, performances, likeness or other material. Before downloading, editing, sharing or publishing, obtain the permissions required for the material and your intended use, including applicable privacy and publicity rights.
 
 Use a remote import only when you have the necessary download/edit permissions and the source service permits the download method. A public link, an attribution credit, a paid subscription or the availability of a third-party downloader does not by itself establish those permissions. Rights in embedded music and other third-party material may differ from rights in the video.
 
@@ -170,7 +190,7 @@ Use a remote import only when you have the necessary download/edit permissions a
 
 The direct-link importer supports public HTTPS video-file responses within its displayed limits. It is not a universal website downloader. YouTube watch/playback URLs and Twitch watch/clip pages are not resolved into media by this release. Use authorized export/download tools supplied by the platform, then import the resulting local file; authorized direct media-file links may also be imported where supported.
 
-Source-service terms apply independently. Klipzy&#x27;s terms and the import acknowledgment do not override them. Do not use the application to bypass DRM, paywalls, authentication, geographic restrictions or other access controls, or to obtain material using stolen credentials. Klipzy does not extract browser cookies or provide an access-control bypass.
+Source-service terms apply independently. Edd Studio&#x27;s terms and the import acknowledgment do not override them. Do not use the application to bypass DRM, paywalls, authentication, geographic restrictions or other access controls, or to obtain material using stolen credentials. Edd Studio does not extract browser cookies or provide an access-control bypass.
 
 ## Local processing and network use
 
@@ -277,7 +297,10 @@ This is a practical product policy, not a legal opinion or a guarantee of enforc
                 <select id="trim-layout">
                   <option value="vertical" selected>🎬 Vertical 9:16 (Shorts/TikTok)</option>
                   <option value="full">🏞️ Full frame (16:9)</option>
-                  <option value="game_reaction">🎮 Gaming Reaction (PiP camera over gameplay)</option>
+                  <option value="stacked_cam_bottom">🎮 Stacked — facecam bottom (9:16)</option>
+                  <option value="stacked_cam_top">🎮 Stacked — facecam top (9:16)</option>
+                  <option value="pip">🎮 PiP facecam (9:16)</option>
+                  <option value="game_reaction">🎮 Gaming Reaction (legacy PiP 16:9)</option>
                 </select>
               </label>
 
@@ -287,9 +310,12 @@ This is a practical product policy, not a legal opinion or a guarantee of enforc
                   <select id="cam-position">
                     <option value="none">None — no facecam (full-frame gameplay)</option>
                     <option value="bottom-right" selected>Bottom Right</option>
+                    <option value="bottom-center">Bottom Center</option>
                     <option value="bottom-left">Bottom Left</option>
                     <option value="top-right">Top Right</option>
+                    <option value="top-center">Top Center</option>
                     <option value="top-left">Top Left</option>
+                    <option value="center">Center</option>
                   </select>
                 </label>
                 <label class="option" id="cam-clip-row">
@@ -353,6 +379,7 @@ This is a practical product policy, not a legal opinion or a guarantee of enforc
                 <option value="shorts">📱 Shorts / TikTok — vertical, up to 60s</option>
                 <option value="x">✖️ X / Twitter — square, up to 140s</option>
                 <option value="longform">📺 Longform highlights — 16:9, up to 90s</option>
+                <option value="extended">⏱️ Extended clips — original size, 5–10 min</option>
                 <option value="tight">✂️ Tight edit — vertical 60s, silence removed</option>
               </select>
             </label>
@@ -367,23 +394,33 @@ This is a practical product policy, not a legal opinion or a guarantee of enforc
             </label>
             <label class="option">
               <span>Min duration (s)</span>
-              <input type="number" id="min-duration" value="20" min="5" max="120" />
+              <input type="number" id="min-duration" value="20" min="5" max="600" />
             </label>
             <label class="option">
               <span>Max duration (s)</span>
-              <input type="number" id="max-duration" value="60" min="10" max="300" />
+              <input type="number" id="max-duration" value="60" min="10" max="600" title="Up to 10 minutes (600s)" />
             </label>
             <label class="option">
               <span>Whisper model</span>
               <select id="whisper-model">
                 <option value="tiny">Tiny (fastest)</option>
-                <option value="base" selected>Base</option>
-                <option value="small">Small</option>
-                <option value="medium">Medium</option>
+                <option value="base">Base (fast)</option>
+                <option value="small" selected>Small (recommended · more accurate)</option>
+                <option value="medium">Medium (detailed)</option>
                 <option value="large-v3">Large v3 (best accuracy — big/long media)</option>
                 <option value="large-v2">Large v2</option>
               </select>
             </label>
+            <label class="option">
+              <span>Speech language</span>
+              <select id="whisper-language">
+                <option value="es" selected>Spanish</option>
+                <option value="en">English</option>
+                <option value="pt">Portuguese</option>
+                <option value="">Auto-detect</option>
+              </select>
+            </label>
+            <p class="muted small">Tip: fixing the language (e.g. Spanish) usually improves captions more than jumping one model size. Prefer Small/Medium for clearer word timing.</p>
             <label class="option">
               <span>Aspect Ratio</span>
               <select id="clip-aspect-ratio">
@@ -394,6 +431,117 @@ This is a practical product policy, not a legal opinion or a guarantee of enforc
                 <option value="full">↔️ Original (No Crop)</option>
               </select>
             </label>
+            <label class="option">
+              <span>Facecam + Gameplay layout</span>
+              <select id="process-layout">
+                <option value="gameplay_only" selected>Gameplay only (smart crop)</option>
+                <option value="stacked_cam_bottom">Stacked — facecam band bottom</option>
+                <option value="stacked_cam_top">Stacked — facecam band top</option>
+                <option value="pip">PiP — floating facecam (use Top center here)</option>
+              </select>
+            </label>
+          </div>
+          <div id="process-facecam-options" class="option-groups hidden" style="margin-top: 14px;">
+            <div class="toggle-group">
+              <div class="toggle-group-title"><span class="tg-icon">⬚</span> Frame gameplay &amp; facecam</div>
+              <p class="muted small">Uses the video you already uploaded. Drag the blue box over the gameplay area and the orange box over your facecam — same idea as the clip editor.</p>
+              <div id="layout-crop-studio" class="layout-crop-studio">
+                <div class="layout-crop-row">
+                  <div class="layout-crop-col">
+                    <div class="layout-crop-label">Source · drag boxes</div>
+                    <div class="layout-crop-stage" id="layout-source-stage">
+                      <video id="layout-source-video" playsinline muted></video>
+                      <div id="layout-game-overlay" class="layout-crop-overlay" tabindex="0" role="slider" aria-label="Gameplay crop">Gameplay · drag</div>
+                      <div id="layout-cam-overlay" class="layout-crop-overlay layout-crop-overlay-cam" tabindex="0" role="slider" aria-label="Facecam crop">Facecam · drag</div>
+                    </div>
+                  </div>
+                  <div class="layout-crop-col layout-crop-col-preview">
+                    <div class="layout-crop-label">Result preview (9:16)</div>
+                    <div class="layout-result-stage" id="layout-result-stage">
+                      <canvas id="layout-result-canvas" width="270" height="480" aria-label="Layout result preview"></canvas>
+                    </div>
+                    <p class="muted small" id="layout-result-caption">Live preview of the Short layout</p>
+                  </div>
+                </div>
+                <div class="layout-crop-transport" id="layout-crop-transport">
+                  <button type="button" class="btn btn-small btn-secondary" id="layout-seek-back" title="Back 10s">−10s</button>
+                  <button type="button" class="btn btn-small btn-secondary" id="layout-play-toggle" title="Play / Pause">▶ Play</button>
+                  <button type="button" class="btn btn-small btn-secondary" id="layout-seek-fwd" title="Forward 10s">+10s</button>
+                  <input type="range" id="layout-seek" min="0" max="0" step="0.1" value="0" aria-label="Scrub video" />
+                  <span class="muted small" id="layout-time-label">0:00 / 0:00</span>
+                </div>
+                <div class="layout-crop-controls">
+                  <div class="layout-crop-pane">
+                    <div class="layout-crop-label">Gameplay box</div>
+                    <label class="option"><span>Width %</span><input type="range" id="layout-game-w" min="20" max="100" value="100" /></label>
+                    <label class="option"><span>Height %</span><input type="range" id="layout-game-h" min="20" max="100" value="70" /></label>
+                  </div>
+                  <div class="layout-crop-pane">
+                    <div class="layout-crop-label">Facecam box</div>
+                    <label class="option"><span>Width %</span><input type="range" id="layout-cam-w" min="10" max="80" value="28" /></label>
+                    <label class="option"><span>Height %</span><input type="range" id="layout-cam-h" min="10" max="80" value="28" /></label>
+                  </div>
+                </div>
+                <input type="hidden" id="process-game-crop" value="" />
+                <input type="hidden" id="process-cam-crop" value="" />
+                <!-- Same-source by default: cam path stays empty and process uses the uploaded video -->
+                <input type="hidden" id="process-cam-path" value="" />
+              </div>
+              <p class="muted small" id="process-layout-hint" style="margin-top:10px;"></p>
+              <div class="toggle-group-grid" style="margin-top:10px;">
+                <label class="option" id="process-stacked-split-row">
+                  <span>Facecam band height (stacked %)</span>
+                  <input type="range" id="process-cam-split" min="15" max="50" value="30" />
+                  <span class="muted small" id="process-cam-split-label">30%</span>
+                </label>
+                <label class="option" id="process-stacked-side-row">
+                  <span>Facecam band side</span>
+                  <select id="process-stacked-side">
+                    <option value="bottom" selected>Bottom (full width)</option>
+                    <option value="top">Top (full width)</option>
+                  </select>
+                </label>
+                <label class="option" id="process-pip-scale-row">
+                  <span>PiP size</span>
+                  <select id="process-cam-scale">
+                    <option value="0.2">Small (20%)</option>
+                    <option value="0.3" selected>Medium (30%)</option>
+                    <option value="0.4">Large (40%)</option>
+                  </select>
+                </label>
+                <label class="option" id="process-pip-position-row">
+                  <span>PiP position</span>
+                  <select id="process-cam-position">
+                    <option value="bottom-right" selected>Bottom right</option>
+                    <option value="bottom-center">Bottom center</option>
+                    <option value="bottom-left">Bottom left</option>
+                    <option value="top-right">Top right</option>
+                    <option value="top-center">Top center</option>
+                    <option value="top-left">Top left</option>
+                    <option value="center">Center</option>
+                  </select>
+                </label>
+              </div>
+              <div class="option-row" style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
+                <button type="button" class="btn btn-small btn-secondary process-layout-preset" data-layout="stacked_cam_bottom" data-split="30">Preset: Stacked cam bottom</button>
+                <button type="button" class="btn btn-small btn-secondary process-layout-preset" data-layout="stacked_cam_top" data-split="40">Preset: Stacked cam top</button>
+                <button type="button" class="btn btn-small btn-secondary process-layout-preset" data-layout="pip" data-position="top-center">Preset: PiP top center</button>
+                <button type="button" class="btn btn-small btn-secondary process-layout-preset" data-layout="pip" data-position="bottom-right">Preset: PiP bottom right</button>
+              </div>
+              <details class="audio-routing" style="margin-top:10px;">
+                <summary>Optional: separate facecam file</summary>
+                <p class="muted small">Only if your webcam is a different recording. Otherwise leave this empty and use the boxes on your uploaded video.</p>
+                <div class="option-row" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                  <input type="text" id="process-cam-path-external" placeholder="Using uploaded video (same source)" readonly style="flex:1;min-width:180px;" />
+                  <button type="button" class="btn btn-small btn-secondary" id="process-pick-cam-btn">Browse…</button>
+                  <button type="button" class="btn btn-small btn-secondary" id="process-clear-cam-btn">Use uploaded video</button>
+                </div>
+                <label class="option" style="margin-top:8px;">
+                  <span>Cam sync offset (ms)</span>
+                  <input type="number" id="process-cam-sync" value="0" step="50" />
+                </label>
+              </details>
+            </div>
           </div>
           <div class="option-groups" style="margin-top: 14px;">
             <div class="toggle-group">
@@ -924,7 +1072,7 @@ This is a practical product policy, not a legal opinion or a guarantee of enforc
 <label class="editor-field"><span>Crop height (% of source)</span><input type="range" id="editor-facecam-height" min="5" max="70" value="25" /></label>
 <label class="editor-field"><span>Layout order</span><select id="editor-facecam-layout"><option value="pip">Facecam over main</option><option value="top">Facecam above main</option><option value="bottom">Facecam below main</option></select></label>
 <label class="editor-field"><span>Facecam output size</span><input type="range" id="editor-facecam-size" min="15" max="45" value="30" /></label>
-<label class="editor-field"><span>Overlay corner</span><select id="editor-facecam-corner"><option value="bottom-right">Bottom right</option><option value="bottom-left">Bottom left</option><option value="top-right">Top right</option><option value="top-left">Top left</option></select></label></div>
+<label class="editor-field"><span>Overlay position</span><select id="editor-facecam-corner"><option value="bottom-right">Bottom right</option><option value="bottom-center">Bottom center</option><option value="bottom-left">Bottom left</option><option value="top-right">Top right</option><option value="top-center">Top center</option><option value="top-left">Top left</option><option value="center">Center</option></select></label></div>
                 <div class="editor-group">
                   <span class="editor-group-label">🎨 Filter</span>
                   <div class="editor-filter-chips" id="editor-filter-chips" role="group" aria-label="Colour filter">
@@ -1355,7 +1503,7 @@ This is a practical product policy, not a legal opinion or a guarantee of enforc
             <h3>Dependency Checker</h3>
             <button class="btn btn-small btn-primary" id="install-all-btn" title="Install every missing dependency in one pass">Install All Recommended</button>
           </div>
-          <p class="muted">Ollama is Klipzy's local AI provider. You do not need to build or configure your own server: install Ollama once, and Klipzy connects to its local service when AI analysis or chat is enabled. LM Studio is optional only if you prefer another local provider.</p>
+          <p class="muted">Ollama is Edd Studio's local AI provider. You do not need to build or configure your own server: install Ollama once, and Edd Studio connects to its local service when AI analysis or chat is enabled. LM Studio is optional only if you prefer another local provider.</p>
           <p class="muted">Missing something? Click <strong>Install</strong> for one item, or <strong>Install All Recommended</strong> to set up everything missing at once (winget / Homebrew / pip). This can take several minutes.</p>
           <div id="install-all-status" class="muted small" role="status" aria-live="polite"></div>
           <div id="install-all-progress" class="install-progress hidden">
@@ -1438,15 +1586,15 @@ This is a practical product policy, not a legal opinion or a guarantee of enforc
           <!-- AI backend: built-in Ollama, or any OpenAI-compatible server -->
           <div class="card-head-row" style="margin-top:18px;">
             <h3>AI engine</h3>
-            <span class="muted small">Use the built-in Ollama, or point Klipzy at your own AI server</span>
+            <span class="muted small">Use the built-in Ollama, or point Edd Studio at your own AI server</span>
           </div>
           <div class="llm-backend-block">
             <div class="llm-backend-choices">
-              <label class="toggle" title="Klipzy talks to Ollama running on this machine. Simplest option — nothing to configure.">
+              <label class="toggle" title="Edd Studio talks to Ollama running on this machine. Simplest option — nothing to configure.">
                 <input type="radio" name="llm-backend" id="llm-backend-ollama" value="ollama" checked />
                 <span>🏠 Built-in (Ollama)</span>
               </label>
-              <label class="toggle" title="Any server that speaks the OpenAI API: llama.cpp llama-server, LM Studio, vLLM, or a cloud endpoint. They all share the same /v1/chat/completions format, so one address is all Klipzy needs.">
+              <label class="toggle" title="Any server that speaks the OpenAI API: llama.cpp llama-server, LM Studio, vLLM, or a cloud endpoint. They all share the same /v1/chat/completions format, so one address is all Edd Studio needs.">
                 <input type="radio" name="llm-backend" id="llm-backend-openai" value="openai" />
                 <span>🌐 Custom (OpenAI-compatible)</span>
               </label>
@@ -1455,7 +1603,7 @@ This is a practical product policy, not a legal opinion or a guarantee of enforc
             <div id="llm-custom-fields" class="llm-custom-fields hidden">
               <label class="option">
                 <span>Server address
-                  <span class="help-hint" title="The base URL of your AI server. Examples:&#10;• LM Studio → http://localhost:1234/v1&#10;• llama.cpp llama-server → http://localhost:8080/v1&#10;• Ollama's OpenAI route → http://localhost:11434/v1&#10;You can paste it with or without the /v1 — Klipzy sorts it out.">ⓘ</span>
+                  <span class="help-hint" title="The base URL of your AI server. Examples:&#10;• LM Studio → http://localhost:1234/v1&#10;• llama.cpp llama-server → http://localhost:8080/v1&#10;• Ollama's OpenAI route → http://localhost:11434/v1&#10;You can paste it with or without the /v1 — Edd Studio sorts it out.">ⓘ</span>
                 </span>
                 <input type="text" id="llm-base-url" placeholder="http://localhost:1234/v1" spellcheck="false" />
               </label>
@@ -1488,11 +1636,11 @@ This is a practical product policy, not a legal opinion or a guarantee of enforc
           </div>
           <div class="llm-backend-block">
             <div class="llm-backend-choices">
-              <label class="toggle" title="Klipzy transcribes on this machine with Whisper (MLX / faster-whisper / openai-whisper, picked automatically). Nothing to configure.">
+              <label class="toggle" title="Edd Studio transcribes on this machine with Whisper (MLX / faster-whisper / openai-whisper, picked automatically). Nothing to configure.">
                 <input type="radio" name="asr-backend" id="asr-backend-local" value="local" checked />
                 <span>🏠 Built-in (Whisper)</span>
               </label>
-              <label class="toggle" title="Any server speaking the OpenAI audio-transcription API: whisper.cpp whisper-server, faster-whisper-server, Speaches, or OpenAI. Klipzy uploads each clip's audio and gets timed text back.">
+              <label class="toggle" title="Any server speaking the OpenAI audio-transcription API: whisper.cpp whisper-server, faster-whisper-server, Speaches, or OpenAI. Edd Studio uploads each clip's audio and gets timed text back.">
                 <input type="radio" name="asr-backend" id="asr-backend-openai" value="openai" />
                 <span>🌐 Custom (whisper.cpp / OpenAI-compatible)</span>
               </label>
@@ -1501,7 +1649,7 @@ This is a practical product policy, not a legal opinion or a guarantee of enforc
             <div id="asr-custom-fields" class="llm-custom-fields hidden">
               <label class="option">
                 <span>Server address
-                  <span class="help-hint" title="The base URL of your speech-to-text server. Examples:&#10;• whisper.cpp whisper-server → http://localhost:8080/v1&#10;• faster-whisper-server / Speaches → http://localhost:8000/v1&#10;Paste it with or without the /v1 — Klipzy sorts it out.">ⓘ</span>
+                  <span class="help-hint" title="The base URL of your speech-to-text server. Examples:&#10;• whisper.cpp whisper-server → http://localhost:8080/v1&#10;• faster-whisper-server / Speaches → http://localhost:8000/v1&#10;Paste it with or without the /v1 — Edd Studio sorts it out.">ⓘ</span>
                 </span>
                 <input type="text" id="asr-base-url" placeholder="http://localhost:8080/v1" spellcheck="false" />
               </label>
@@ -1524,7 +1672,7 @@ This is a practical product policy, not a legal opinion or a guarantee of enforc
               <button class="btn btn-primary btn-small" id="asr-save-btn">Save subtitle engine</button>
               <span class="muted small" id="asr-backend-status">Checking…</span>
             </div>
-            <p class="muted small">Karaoke captions need word-level timings. Servers that don't return them still work, but the highlight is spread evenly across each line instead of matching each spoken word — the connection test tells you which you're getting. If the server can't be reached during a run, Klipzy falls back to local Whisper automatically.</p>
+            <p class="muted small">Karaoke captions need word-level timings. Servers that don't return them still work, but the highlight is spread evenly across each line instead of matching each spoken word — the connection test tells you which you're getting. If the server can't be reached during a run, Edd Studio falls back to local Whisper automatically.</p>
           </div>
 
           <div class="model-catalog-head card-head-row" style="margin-top:18px;">
@@ -1567,13 +1715,13 @@ This is a practical product policy, not a legal opinion or a guarantee of enforc
             <h3>Maintenance</h3>
             <button class="btn btn-small btn-secondary" id="clear-cache-btn" title="Delete cached transcripts (safe — only forces the next run to re-transcribe)">Clear transcript cache</button>
           </div>
-          <p class="muted small">Klipzy caches transcripts so re-processing the same video is instant. Clearing it frees space and forces a fresh transcription next time. Rendered clips are never touched. Deleting a project also removes its rendered clips automatically.</p>
+          <p class="muted small">Edd Studio caches transcripts so re-processing the same video is instant. Clearing it frees space and forces a fresh transcription next time. Rendered clips are never touched. Deleting a project also removes its rendered clips automatically.</p>
         </div>
 
         <!-- Support card -->
         <div class="card">
           <h3>Support & Share</h3>
-          <p class="muted">Enjoying Klipzy Studio? Here's how to keep it going:</p>
+          <p class="muted">Enjoying Edd Studio? Here's how to keep it going:</p>
           <div class="support-links">
             <a id="support-paypal" class="support-link" href="#" target="_blank" rel="noopener">💸 Buy me a coffee (PayPal)</a>
             <a id="support-beacons" class="support-link" href="#" target="_blank" rel="noopener">🌐 My links (Beacons)</a>
@@ -1595,12 +1743,14 @@ This is a practical product policy, not a legal opinion or a guarantee of enforc
   <script src="src/ui-helpers.js"></script>
   <script src="src/model-preflight.js"></script>
   <script src="src/process-payload.js"></script>
+  <script src="src/layout-crop.js"></script>
   <script src="src/caption-preview-math.js"></script>
   <script src="src/editor-spec.js"></script>
   <script src="src/project-store.js"></script>
   <script src="src/cut-timing.js"></script>
   <script src="src/renderer.js"></script>
   <script src="src/url-import.js"></script>
+  <script src="src/obs-watch.js"></script>
   <script src="src/media-tools.js"></script>
   <script src="src/quality-review.js"></script>
   <script src="src/caption-editor.js"></script>

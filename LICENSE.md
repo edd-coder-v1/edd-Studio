@@ -1,7 +1,7 @@
 TechFreq Developments Open-Attribution License
 Copyright (c) 2025-2026 TechFreq Developments. All rights reserved.
 
-This license applies to Klipzy Studio, a local-first "Long Form to Shorts" studio
+This license applies to Edd Studio, a local-first "Long Form to Shorts" studio
 ("the Software"). The Software is provided as a "mostly open-source" project to
 encourage community growth and collaboration, provided that the original
 authorship is respected.

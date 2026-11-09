@@ -1,10 +1,10 @@
 @echo off
 setlocal
-title Klipzy Studio Launcher
+title Edd Studio Launcher
 cd /d "%~dp0"
 
 echo ==============================================
-echo    Klipzy Studio - One-Click Launcher
+echo    Edd Studio - One-Click Launcher
 echo ==============================================
 echo.
 
@@ -138,9 +138,9 @@ echo.
 echo Electron repaired successfully.
 goto :launch
 
-REM ---------- [5/5] Launch Klipzy Studio ----------
+REM ---------- [5/5] Launch Edd Studio ----------
 :launch
-echo [5/5] Launching Klipzy Studio...
+echo [5/5] Launching Edd Studio...
 echo.
 echo    The desktop app will open shortly.
 echo    Close the app window to stop.
@@ -150,7 +150,7 @@ call npm start
 popd
 
 echo.
-echo Klipzy Studio has exited.
+echo Edd Studio has exited.
 pause
 exit /b 0
 
@@ -158,7 +158,7 @@ REM ============ ERROR HANDLERS ============
 :no_python
 echo.
 echo Python was not found on this PC.
-echo Klipzy needs Python 3.10 or newer.
+echo Edd Studio needs Python 3.10 or newer.
 echo.
 where winget >nul 2>&1
 if errorlevel 1 goto :python_manual
@@ -173,7 +173,7 @@ goto :reopen_needed
 :old_python
 echo.
 for /f "tokens=*" %%v in ('python --version 2^>^&1') do echo Found %%v - too old.
-echo Klipzy needs Python 3.10 or newer.
+echo Edd Studio needs Python 3.10 or newer.
 echo.
 echo Direct Windows download (pick "Windows installer (64-bit)"):
 echo    https://www.python.org/downloads/windows/
@@ -197,7 +197,7 @@ exit /b 1
 :no_node
 echo.
 echo Node.js was not found on this PC.
-echo Klipzy needs Node.js 18 or newer (any current LTS is fine).
+echo Edd Studio needs Node.js 18 or newer (any current LTS is fine).
 echo.
 where winget >nul 2>&1
 if errorlevel 1 goto :node_manual
