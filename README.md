@@ -1,4 +1,4 @@
-# 🎬 Klipzy Studio
+# 🎬 edd-Studio
 
 A **local-first Long Form to Shorts studio by TechFreq Developments** for Windows, macOS, and Linux. Turn long videos, podcasts, and streams into ready-to-post vertical Shorts — entirely on your own machine. **No cloud AI, no fees.**
 

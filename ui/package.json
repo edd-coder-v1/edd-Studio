@@ -1,7 +1,7 @@
 {
-  "name": "klipzy-studio",
+  "name": "edd-studio",
   "version": "1.1.4",
-  "description": "Klipzy Studio - local-first Long Form to Shorts studio by TechFreq",
+  "description": "edd-Studio - local-first Long Form to Shorts studio",
   "main": "electron/main.js",
   "scripts": {
     "start": "electron .",
@@ -22,7 +22,7 @@
   },
   "build": {
     "appId": "com.techfreq.klipzy-studio",
-    "productName": "Klipzy Studio",
+    "productName": "edd-Studio",
     "files": [
       "electron/**/*",
       "src/**/*",
